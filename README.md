@@ -36,3 +36,50 @@ pre-parse and rule filter to allow desired packets
  - [ ] with eventdev for Load Balancer for parallel, ordered and atomic flow
  - [ ] pre-parse and ACL table lookup
  - [ ] integrate hyperscan lookup with pattern|packet matching
+ 
+ ### extra
+ - runmode-dpdkintel.c - updated check for IDS modes
+ - source-dpdkintel.c - basic changes for functionality
+ - suricata.c - added fixes and removed uecessary code
+ - util-dpdk-setup.c - added support for Bypass and IDS code flow (need testing with packets)
+ - util-running-modes.c - updated for single numa node instances
+
+Build:
+ - run autogen.sh
+ - Configure - ./configure --enable-dpdkintel
+ - compiled - make -j all
+ - run - ./src/suricata --list-dpdkintel-ports
+
+```
+EAL: PCI memory mapped at 0x7fd772a03000
+EAL: PCI Port IO found start=0xc180
+
+--- DPDK Intel Ports ---
+
+Overall Ports: 4
+
+-- Port: 0
+--- MTU: 1500
+--- MAX RX MTU: 9728
+--- Driver: rte_virtio_pmd
+--- Index: 0
+--- Queues RX 1 & TX 1
+--- SRIOV VF: 0
+--- Offload RX: 0 TX: 0
+--- CPU NUMA node: 0
+--- PCI Addr: 0000:00:09.0
+--- Status: Up
+Led for 5 sec.......
+
+-- Port: 1
+--- MTU: 1500
+--- MAX RX MTU: 9728
+--- Driver: rte_virtio_pmd
+--- Index: 0
+--- Queues RX 1 & TX 1
+--- SRIOV VF: 0
+--- Offload RX: 0 TX: 0
+--- CPU NUMA node: 0
+--- PCI Addr: 0000:00:0a.0
+--- Status: Up
+```
