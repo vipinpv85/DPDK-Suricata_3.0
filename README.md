@@ -14,7 +14,7 @@ pre-parse and rule filter to allow desired packets
  1. Download DPDK from dpdk.org
  2. Follow quick start guide to build DPDK isntance
  3. Cross check DPDK with Ports by running testpmd or l2fwd
- 4. Configure SURICATA with './configure --dpdkintel --with-libdpdkintel-includes=$RTE_SDK/$RTE_TARGET/include/ --with-libdpdkintel-libraries= $RTE_SDK/$RTE_TARGET/lib'
+ 4. Configure SURICATA with `./configure --dpdkintel --with-libdpdkintel-includes=$RTE_SDK/$RTE_TARGET/include/ --with-libdpdkintel-libraries= $RTE_SDK/$RTE_TARGET/lib`
 
 ## Tested Enviroments
  - Host Machine
@@ -25,15 +25,11 @@ pre-parse and rule filter to allow desired packets
 ## Related Links
 
 ### Use cases
-'''
  - https://www.slideshare.net/vipinpv85/dpdk-iot-packet-analyzer
  - https://www.slideshare.net/vipinpv85/porting-idsips-to-work-with-dpdk
-'''
 
 ### framework overview
-'''
 - https://www.slideshare.net/vipinpv85/dpdk-frame-pipeline-for-ips-ids-suricata
-'''
 
 # Future work
  - [ ] on dockers with vhost user
