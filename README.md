@@ -25,7 +25,7 @@ pre-parse and rule filter to allow desired packets
 ## Related Links
 
 ### Use cases
- - https://www.slideshare.net/vipinpv85/dpdk-iot-packet-analyzer
+ - [packet analyzer] (https://www.slideshare.net/vipinpv85/dpdk-iot-packet-analyzer)
  - https://www.slideshare.net/vipinpv85/porting-idsips-to-work-with-dpdk
 
 ### framework overview
