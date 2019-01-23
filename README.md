@@ -11,16 +11,16 @@ RX-TX threads for packet interface with DPDK ports.
 pre-parse and rule filter to allow desired packets
 
 ## How to?
-Download DPDK from dpdk.org
-Follow quick start guide to build DPDK isntance
-Cross check DPDK with Ports by running testpmd or l2fwd
-Configure SURICATA with './configure --dpdkintel --with-libdpdkintel-includes=$RTE_SDK/$RTE_TARGET/include/ --with-libdpdkintel-libraries= $RTE_SDK/$RTE_TARGET/lib'
+ 1. Download DPDK from dpdk.org
+ 2. Follow quick start guide to build DPDK isntance
+ 3. Cross check DPDK with Ports by running testpmd or l2fwd
+ 4. Configure SURICATA with './configure --dpdkintel --with-libdpdkintel-includes=$RTE_SDK/$RTE_TARGET/include/ --with-libdpdkintel-libraries= $RTE_SDK/$RTE_TARGET/lib'
 
 ## Tested Enviroments
-Host Machine
-Guest Machine with PCIe pass through
-Guest Machine with vhost-pci and OVS
-Dockers with whitelisted interface
+ - Host Machine
+ - Guest Machine with PCIe pass through
+ - Guest Machine with vhost-pci and OVS
+ - Dockers with whitelisted interface
 
 ## Related Links
 
