@@ -25,11 +25,11 @@ Dockers with whitelisted interface
 ## Related Links
 
 ### Use cases
-https://www.slideshare.net/vipinpv85/dpdk-iot-packet-analyzer
-https://www.slideshare.net/vipinpv85/porting-idsips-to-work-with-dpdk
+ - https://www.slideshare.net/vipinpv85/dpdk-iot-packet-analyzer
+ - https://www.slideshare.net/vipinpv85/porting-idsips-to-work-with-dpdk
 
 ### framework overview
-https://www.slideshare.net/vipinpv85/dpdk-frame-pipeline-for-ips-ids-suricata
+ - https://www.slideshare.net/vipinpv85/dpdk-frame-pipeline-for-ips-ids-suricata
 
 # Future work
  - [ ] on dockers with vhost user
