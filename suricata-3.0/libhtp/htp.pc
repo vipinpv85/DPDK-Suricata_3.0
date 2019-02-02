@@ -1,0 +1,11 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: LibHTP
+Description: A security-aware HTTP parser, designed for use in IDS/IPS and WAF products.
+Version: 0.5.18
+Libs: -L${libdir} -lhtp
+Cflags: -I${includedir} -I${libdir}/htp/include
+
