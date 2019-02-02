@@ -1,0 +1,16 @@
+UNADDRESSABLE ACCESS
+name=magic issue, not important
+libc.so.6!__strnlen_sse2
+libc.so.6!_IO_vfprintf_internal
+libc.so.6!__GI___vasprintf_chk
+libc.so.6!__asprintf_chk
+libmagic.so.1!?
+libmagic.so.1!file_apprentice
+libmagic.so.1!magic_load
+suricata!main
+
+LEAK
+name=useless warning, likely DrMemory bug
+*
+libpcre.so.3!pcre_get_substring
+
