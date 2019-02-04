@@ -35,7 +35,7 @@ pre-parse and rule filter to allow desired packets
  - [ ] on dockers with vhost user
  - [ ] with eventdev for Load Balancer for parallel, ordered and atomic flow
  - [ ] pre-parse and ACL table lookup
- - [ ] integrate hyperscan lookup with pattern|packet matching
+ - [ ] integrate hyperscan lookup with pattern|packet matching (https://github.com/vipinpv85/DPDK-HYPERSCAN-SAMPLE)
  
  ### extra
  - runmode-dpdkintel.c - updated check for IDS modes
