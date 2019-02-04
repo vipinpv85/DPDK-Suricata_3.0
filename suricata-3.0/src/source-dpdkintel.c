@@ -1402,9 +1402,8 @@ int32_t launchDpdkFrameParser(void)
         }
     }
 
-    SCLogDebug("10-100 Mb/s %x", portIndexBmp_10_100);
-    SCLogDebug("1000 Mb/s %x", portIndexBmp_1000);
-    SCLogDebug("10000 Mb/s %x", portIndexBmp_10000);
+    SCLogDebug("10-100 Mb/s %x, 1000 Mb/s %x, 10000 Mb/s %x",
+			portIndexBmp_10_100, portIndexBmp_1000, portIndexBmp_10000);
 
     /* ToDo: use function pointer array to invoke for IDS|IPS */
 
@@ -1462,7 +1461,6 @@ int32_t launchDpdkFrameParser(void)
 
         SCLogNotice("DPDK Started in IPS Mode!!!");
     }
-#if 0
     else if (DPDKINTEL_GENCFG.OpMode == IDS) {
         if (portIndexBmp_10_100)
             rte_eal_remote_launch(ReceiveDpdkPkts_IDS_10_100, 
@@ -1491,7 +1489,6 @@ int32_t launchDpdkFrameParser(void)
 
         rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS, NULL, cpuIndex);
     }
-#endif
     return 0;
 }
 
