@@ -1462,6 +1462,7 @@ int32_t launchDpdkFrameParser(void)
         SCLogNotice("DPDK Started in IPS Mode!!!");
     }
     else if (DPDKINTEL_GENCFG.OpMode == IDS) {
+#if 0
         if (portIndexBmp_10_100)
             rte_eal_remote_launch(ReceiveDpdkPkts_IDS_10_100, 
                                   &portIndexBmp_10_100, cpuIndex);
@@ -1471,11 +1472,13 @@ int32_t launchDpdkFrameParser(void)
         if (portIndexBmp_10000)
             rte_eal_remote_launch(ReceiveDpdkPkts_IDS_10000, 
                                   &portIndexBmp_10000, cpuIndex);
+#endif
+        rte_eal_remote_launch(ReceiveDpdkPkts_IDS, NULL, cpuIndex);
         SCLogNotice("DPDK Started in IDS Mode!!!");
 
-        rte_eal_remote_launch(ReceiveDpdkPkts_IDS, NULL, cpuIndex);
     }
     else if (DPDKINTEL_GENCFG.OpMode == BYPASS) {
+#if 0
         if (portIndexBmp_10_100)
             rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS_10_100, 
                                   portIndexBmp_10_100, cpuIndex);
@@ -1485,9 +1488,9 @@ int32_t launchDpdkFrameParser(void)
         if (portIndexBmp_10000)
             rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS_10000, 
                                   portIndexBmp_10000, cpuIndex);
-        SCLogNotice("DPDK Started in BYPASS Mode!!!");
-
+#endif
         rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS, NULL, cpuIndex);
+        SCLogNotice("DPDK Started in BYPASS Mode!!!");
     }
     return 0;
 }
