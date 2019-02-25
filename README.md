@@ -87,12 +87,17 @@ Led for 5 sec.......
 ## Build Issues
 
 1. rte_mempool.h:166:1: warning: data definition has no type or storage class STAILQ_HEAD(rte_mempool_objhdr_list, rte_mempool_objhdr);
+
 Answer> this looks to be enviroment issue for suricata build, try ```make CFLAG="-I/usr/include". If and only if ````grep STAILQ_ENTRY /usr/include/sys/queue.h````
 
 2. dpdk-include-common.h:19:29: fatal error: rte_pci_dev_ids.h: No such file or directory compilation terminated.
+
 Answer> As explained in https://github.com/vipinpv85/DPDK-Suricata_3.0/issues/4 DPDK version 17.05 onwards has removed these, one can manually remove the reference and add MACRO for NIC checks.
 
 3. Why is code not updated for new DPDK?
+
 Answer> this is proof of concepts created 5 years back. If there more traction, new suricata and DPDK can be considered.
 
-2. 
+4. `PKG_CHECK_MODULES(DEPS, $pkg_modules)'
+
+Answer> run `autoreconf -f -i` and rerun 'configure'. This will give the list of dependency failures. example libperl-dev & libgtk2.0-dev
