@@ -15,6 +15,65 @@ pre-parse and rule filter to allow desired packets
  2. Follow **quick start guide** to build DPDK (minimum version **1.8**) (with make config T=x86_64-native-linuxapp-gcc O=x86_64-native-linuxapp-gcc)
  3. Cross check DPDK with Ports by running testpmd or l2fwd
  4. Configure SURICATA with **`./configure --enable-dpdkintel --with-libdpdkintel-includes=$RTE_SDK/$RTE_TARGET/include/ --with-libdpdkintel-libraries=$RTE_SDK/$RTE_TARGET/lib`**
+ 
+ ```
+ Suricata Configuration:
+  AF_PACKET support:                       no
+  DPDK_INTEL support:                      yes
+  PF_RING support:                         no
+  NFQueue support:                         no
+  NFLOG support:                           no
+  IPFW support:                            no
+  Netmap support:                          no
+  DAG enabled:                             no
+  Napatech enabled:                        no
+
+  Unix socket enabled:                     no
+  Detection enabled:                       yes
+
+  libnss support:                          no
+  libnspr support:                         no
+  libjansson support:                      no
+  hiredis support:                         no
+  Prelude support:                         no
+  PCRE jit:                                yes
+  LUA support:                             no
+  libluajit:                               no
+  libgeoip:                                no
+  Non-bundled htp:                         no
+  Old barnyard2 support:                   no
+  CUDA enabled:                            no
+
+  Suricatasc install:                      yes
+
+  Unit tests enabled:                      no
+  Debug output enabled:                    no
+  Debug validation enabled:                no
+  Profiling enabled:                       no
+  Profiling locks enabled:                 no
+  Coccinelle / spatch:                     no
+
+Generic build parameters:
+  Installation prefix:                     /usr/local
+  Configuration directory:                 /usr/local/etc/suricata/
+  Log directory:                           /usr/local/var/log/suricata/
+
+  --prefix                                 /usr/local
+  --sysconfdir                             /usr/local/etc
+  --localstatedir                          /usr/local/var
+
+  Host:                                    x86_64-unknown-linux-gnu
+  Compiler:                                gcc (exec name) / gcc (real)
+  GCC Protect enabled:                     no
+  GCC march native enabled:                yes
+  GCC Profile enabled:                     no
+  Position Independent Executable enabled: no
+  CFLAGS                                   -g -O2 -march=native -DHAVE_DPDKINTEL
+  PCAP_CFLAGS                               -I/usr/include
+  SECCFLAGS
+ ```
+5. Build: make -j all
+
 
 ## Tested Enviroments
  - Host Machine
@@ -45,11 +104,7 @@ pre-parse and rule filter to allow desired packets
  - util-dpdk-setup.c - added support for Bypass and IDS code flow (need testing with packets)
  - util-running-modes.c - updated for single numa node instances
 
-Build:
- - run autogen.sh
- - Configure - ./configure --enable-dpdkintel
- - compiled - make -j all
- - run - ./src/suricata --list-dpdkintel-ports
+Run: ./src/suricata --list-dpdkintel-ports
 
 ```
 EAL: PCI memory mapped at 0x7fd772a03000
