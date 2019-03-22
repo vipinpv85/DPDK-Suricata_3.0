@@ -1112,7 +1112,6 @@
     esac
 
     AS_IF([test "x$enable_dpdkintel" = "xyes"], [
-        #CFLAGS="$CFLAGS -DHAVE_DPDKINTEL -I${with_libdpdkintel_includes} -include ${with_libdpdkintel_includes}/rte_config.h "
         enable_af_packet="no"
 
         AC_ARG_WITH(libdpdkintel_includes,
@@ -1124,7 +1123,7 @@
 
         if test "$with_libdpdkintel_includes" != "no"; then
           CFLAGS="$CFLAGS -DHAVE_DPDKINTEL -I${with_libdpdkintel_includes} -include ${with_libdpdkintel_includes}/rte_config.h "
-          CPPFLAGS="${CPPFLAGS} -I${with_libdpdkintel_includes} -include ${with_libdpdkintel_includes}/rte_config.h "
+          CPPFLAGS="${CPPFLAGS} "
         else
           if test "${RTE_SDK}" = ""; then
             echo ""
@@ -1136,8 +1135,8 @@
             exit 1
           else
             if test -f ${RTE_SDK}/${RTE_TARGET}/include/rte_eal.h; then
-              CFLAGS="$CFLAGS -DHAVE_DPDKINTEL -I${RTE_SDK}/${RTE_TARGET}/include/ -include $${RTE_SDK}/${RTE_TARGET}/include/rte_config.h "
-              CPPFLAGS="${CPPFLAGS} -I${RTE_SDK}/${RTE_TARGET}/include/  -include ${RTE_SDK}/${RTE_TARGET}/include/rte_config.h "
+              CFLAGS="$CFLAGS -DHAVE_DPDKINTEL -I${RTE_SDK}/${RTE_TARGET}/include/ -include ${RTE_SDK}/${RTE_TARGET}/include/rte_config.h "
+              CPPFLAGS="${CPPFLAGS} "
             else
               echo ""
               echo "-----------------------------------------------"
