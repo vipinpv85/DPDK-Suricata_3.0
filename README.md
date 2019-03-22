@@ -6,15 +6,22 @@ Create simple DPDK RX-TX to allow packets into SURICATA processing pipeiline mod
 integrate dpdk PMD to suricata read method under worker mode
 
 ## Implemented
-Worker mode for IDS|IPS|BYPASS modes.
-RX-TX threads for packet interface with DPDK ports.
-pre-parse and rule filter to allow desired packets
+ - Worker mode for IDS|IPS|BYPASS modes.
+ - RX-TX threads for packet interface with DPDK ports.
+ - pre-parse and rule filter to allow desired packets
 
-## How to?
- 1. Download DPDK from dpdk.org
- 2. Follow **quick start guide** to build DPDK (minimum version **1.8**) (with make config T=x86_64-native-linuxapp-gcc O=x86_64-native-linuxapp-gcc)
- 3. Cross check DPDK with Ports by running testpmd or l2fwd
- 4. Configure SURICATA with **`./configure --enable-dpdkintel --with-libdpdkintel-includes=$RTE_SDK/$RTE_TARGET/include/ --with-libdpdkintel-libraries=$RTE_SDK/$RTE_TARGET/lib`**
+## How to build DPDK?
+ 1. Download DPDK LTS **`https://fast.dpdk.org/rel/dpdk-17.11.3.tar.xz`** from dpdk.org.
+ 2. Untar DPDK and use **make config T=x86_64-native-linuxapp-gcc O=x86_64-native-linuxapp-gcc**.
+ 3. Build DPDK by `export RTE_SDK=$PWD; export RTE_TARGET=x86_64-native-linuxapp-gcc; cd x86_64-native-linuxapp-gcc, make -j 4`.
+ 4. Test the custom build by cross checking examples like **helloworld & l2fwd**.
+
+## How to build Suricata with DPDK?
+ 1. Download the project zip and unzip the contents.
+ 2. Execute `cd DPDK-Suircata_3.0/suricata-3.0'.
+ 3. If DPDK enviroment variables (**RTE_TARGET & RTE_SDK**) are present, use `./configure --enable-dpdkintel` 
+ 4. If DPDK is isntalled as package or custom build directory, use `./configure --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>`.
+ 5. Result should be as below
  
  ```
  Suricata Configuration:
@@ -72,8 +79,12 @@ Generic build parameters:
   PCAP_CFLAGS                               -I/usr/include
   SECCFLAGS
  ```
-5. Build: make -j all
+5. Build with `make -j 10`
 
+## Build Envirment
+ - gcc: Ubuntu 7.3.0-27ubuntu1~18.04
+ - OS: 4.15.0-46-generic
+ - debian version: Ubuntu 18.04.2 LTS
 
 ## Tested Enviroments
  - Host Machine
@@ -104,7 +115,8 @@ Generic build parameters:
  - util-dpdk-setup.c - added support for Bypass and IDS code flow (need testing with packets)
  - util-running-modes.c - updated for single numa node instances
 
-Run: ./src/suricata --list-dpdkintel-ports
+## Test Run: 
+ - ./src/suricata --list-dpdkintel-ports
 
 ```
 EAL: PCI memory mapped at 0x7fd772a03000
@@ -142,21 +154,20 @@ Led for 5 sec.......
 
 ## Build Issues
 
-1. rte_mempool.h:166:1: warning: data definition has no type or storage class STAILQ_HEAD(rte_mempool_objhdr_list, rte_mempool_objhdr);
+1. configure fails for iconv
+Answer> in ubuntu iconv header and libraries were missing. So follow steps below
+a. Fetch latest from `http://ftp.gnu.org/pub/gnu/libiconv/`
+b. untar content and `./configure; make; make install;`
+c. retry the configuration.
 
-Answer> this looks to be enviroment issue for suricata build, try ```make CFLAG="-I/usr/include". If and only if ````grep STAILQ_ENTRY /usr/include/sys/queue.h````
+2. Running application, complains about missing libiconv.so
+Answer> after issue 1, run `ldconfig -v`
 
-2. dpdk-include-common.h:19:29: fatal error: rte_pci_dev_ids.h: No such file or directory compilation terminated.
-
-Answer> As explained in https://github.com/vipinpv85/DPDK-Suricata_3.0/issues/4 DPDK version 17.05 onwards has removed these, one can manually remove the reference and add MACRO for NIC checks.
-
-3. Why is code not updated for new DPDK?
-
+3. Why is code not updated for new suricata?
 Answer> this is proof of concepts created 5 years back. If there more traction, new suricata and DPDK can be considered.
 
 4. `PKG_CHECK_MODULES(DEPS, $pkg_modules)'
-
-Answer> run `autoreconf -f -i` and rerun 'configure'. This will give the list of dependency failures. example libperl-dev & libgtk2.0-dev
+Answer> may be depedency issue or failures. example libperl-dev & libgtk2.0-dev
 
 ### Run Log
 ```
