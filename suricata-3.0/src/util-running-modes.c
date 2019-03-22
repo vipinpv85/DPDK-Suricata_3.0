@@ -19,6 +19,9 @@
  *
  *  \author Eric Leblond <eric@regit.org>
  */
+#ifdef HAVE_DPDKINTEL
+#include "dpdk-include-common.h"
+#endif /* HAVE_DPDKINTEL */
 
 #include "suricata-common.h"
 #include "config.h"
@@ -29,10 +32,6 @@
 #include "util-unittest.h"
 #include "util-debug.h"
 #include "conf-yaml-loader.h"
-
-#ifdef HAVE_DPDKINTEL
-#include "dpdk-include-common.h"
-#endif /* HAVE_DPDKINTEL */
 
 int ListKeywords(const char *keyword_info)
 {
@@ -93,13 +92,8 @@ void ListDpdkIntelPorts (void)
             printf("\n  --- Index: %u ", info.if_index);
             printf("\n  --- Queues RX %u & TX %u", info.max_rx_queues, info.max_tx_queues);
             printf("\n  --- SRIOV VF: %u ", info.max_vfs);
-            printf("\n  --- Offload RX: %u TX: %u ", info.rx_offload_capa, info.tx_offload_capa);
-            printf("\n  --- CPU NUMA node: %u", info.pci_dev->numa_node);
-            printf("\n  --- PCI Addr: "PCI_PRI_FMT, 
-                                      info.pci_dev->addr.domain, 
-                                      info.pci_dev->addr.bus, 
-                                      info.pci_dev->addr.devid, 
-                                      info.pci_dev->addr.function);
+            printf("\n  --- Offload RX: %"PRIx64" TX: %"PRIx64" ", info.rx_offload_capa, info.tx_offload_capa);
+            printf("\n  --- CPU NUMA node: %d", rte_eth_dev_socket_id(portIndex));
 
             rte_eth_link_get_nowait(portIndex, &link);
             /*printf("\n  --- Speed: %d", link.link_speed);

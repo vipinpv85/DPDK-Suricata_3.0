@@ -161,12 +161,6 @@ int32_t dpdkIntelDevSetup(void)
             return -3;
         }
 
-        if (dev_info.pci_dev->id.vendor_id != PCI_VENDOR_ID_INTEL) {
-            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED,"port %d unsupported vendor",
-                       inport);
-            return -6;
-        }
-
         fflush(stdout);
 
         /* ToDo - change default configuration to systune configuration */
@@ -224,27 +218,28 @@ int32_t dpdkIntelDevSetup(void)
                        (link.link_status == 1)?"up":"down");
             return -10;
         }
-        portSpeed[inport] =    (link.link_speed == ETH_LINK_SPEED_10)?1:
-                               (link.link_speed == ETH_LINK_SPEED_100)?2:
-                               (link.link_speed == ETH_LINK_SPEED_1000)?3:
-                               (link.link_speed == ETH_LINK_SPEED_10G)?4:
-                               (link.link_speed == ETH_LINK_SPEED_20G)?5:
-                               (link.link_speed == ETH_LINK_SPEED_40G)?6:
+        portSpeed[inport] =    (link.link_speed == ETH_SPEED_NUM_10M)?1:
+                               (link.link_speed == ETH_SPEED_NUM_100M)?2:
+                               (link.link_speed == ETH_SPEED_NUM_1G)?3:
+                               (link.link_speed == ETH_SPEED_NUM_10G)?4:
+                               (link.link_speed == ETH_SPEED_NUM_20G)?5:
+                               (link.link_speed == ETH_SPEED_NUM_40G)?6:
                                0;
 
         /* ToDo: add support for 20G and 40G */
-        if ((link.link_speed == ETH_LINK_SPEED_20G) || 
-            (link.link_speed == ETH_LINK_SPEED_40G))
+        if ((link.link_speed == ETH_SPEED_NUM_20G) || 
+            (link.link_speed == ETH_SPEED_NUM_40G))
         {
             SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Port %u unspported speed %u",
                        inport, portSpeed[inport]);
             return -11;
         }
-        else {
-            (link.link_speed == ETH_LINK_SPEED_10)?portSpeed10++:
-            (link.link_speed == ETH_LINK_SPEED_100)?portSpeed100++:
-            (link.link_speed == ETH_LINK_SPEED_1000)?portSpeed1000++:
-            (link.link_speed == ETH_LINK_SPEED_10000)?portSpeed10000++:
+
+        {
+            (link.link_speed == ETH_SPEED_NUM_10M)?portSpeed10++:
+            (link.link_speed == ETH_SPEED_NUM_100M)?portSpeed100++:
+            (link.link_speed == ETH_SPEED_NUM_1G)?portSpeed1000++:
+            (link.link_speed == ETH_SPEED_NUM_10G)?portSpeed10000++:
             portSpeedUnknown++;
         }
 
@@ -260,13 +255,6 @@ void dpdkConfSetup(void)
     int32_t ret = 0;
     uint8_t inport = 0, outport = 0, portIndex = 0, portBit = 0;
     
-    if (!(RTE_VER_MAJOR > SC_DPDK_MAJOR)? (1):
-         ((RTE_VER_MAJOR == SC_DPDK_MAJOR) &&
-          (RTE_VER_MINOR >= SC_DPDK_MINOR))?(1):(0))
-    {
-        SCLogError(SC_ERR_MISSING_CONFIG_PARAM,"DPDK Version unsupported.Minimum Ver-1.8.0 Reqd!!!");
-        exit(EXIT_FAILURE);
-    }
     SCLogNotice("DPDK Version: %s", rte_version());
 
     ret = rte_eal_has_hugepages();

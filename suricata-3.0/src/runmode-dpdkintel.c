@@ -1,5 +1,10 @@
 #define _GNU_SOURCE
 
+#include "runmode-dpdkintel.h"
+#include "source-dpdkintel.h"
+#include "util-dpdk-config.h"
+#include "util-dpdk-setup.h"
+
 #include "suricata-common.h"
 #include "tm-threads.h"
 #include "conf.h"
@@ -22,10 +27,6 @@
 #include "decode.h"
 
 
-#include "runmode-dpdkintel.h"
-#include "source-dpdkintel.h"
-#include "util-dpdk-config.h"
-#include "util-dpdk-setup.h"
 
 #define DPDKINTEL_RUNMODE_WORKERS 1
 
@@ -86,7 +87,6 @@ void ParseDpdkConfig(void)
     uint32_t portMapIndex = 0;
     int index = 0;
     struct rte_eth_dev_info dev_info;
-    struct rte_pci_addr dev_addr;
     ConfNode *ifnode, *ifroot;
 
     ConfNode *dpdkIntel_node = ConfGetNode("dpdkintel");
@@ -147,7 +147,6 @@ void ParseDpdkConfig(void)
 
         for (portIndex = 0; portIndex < portTotal; portIndex++) {
             memset(&dev_info, 0x00, sizeof(struct rte_eth_dev_info));
-            memset(&dev_addr, 0x00, sizeof(struct rte_pci_addr));
 
             rte_eth_dev_info_get (portIndex, &dev_info);
             if (NULL == dev_info.pci_dev) {
@@ -156,29 +155,13 @@ void ParseDpdkConfig(void)
                 return;
             }
 
-            eal_parse_pci_DomBDF(iface, &dev_addr);
-            if (rte_eal_compare_pci_addr(&dev_info.pci_dev->addr, &dev_addr) == 0) {
-                SCLogDebug("PCI in port : domain: %x bus: %x Id:%x Func: %x Vendor ID: %x Device ID: %x",
-                dev_addr.domain, dev_addr.bus, dev_addr.devid, dev_addr.function,
-                dev_info.pci_dev->id.vendor_id, dev_info.pci_dev->id.device_id);
-
-                /* PortMap structure update with inport */
-                portMap [portMapIndex].inport = portIndex;
-                portInOutSet |= 0x01;
-            } else {
-                if ((DPDKINTEL_GENCFG.OpMode != IDS)) {
-                    eal_parse_pci_DomBDF(oface, &dev_addr);
-                    if (rte_eal_compare_pci_addr(&dev_info.pci_dev->addr, &dev_addr) == 0) {
-                        SCLogDebug("PCI out port : domain: %x bus: %x Id:%x Func: %x Vendor ID: %x Device ID: %x",
-                        dev_addr.domain, dev_addr.bus, dev_addr.devid, dev_addr.function,
-                        dev_info.pci_dev->id.vendor_id, dev_info.pci_dev->id.device_id);            
-
-                        /* PortMap structure update with outport */
-                        portMap [portMapIndex].outport = portIndex;
-                        portInOutSet |= 0x02;
-                    }
-                }
-            }
+	portMap [portMapIndex].inport = portIndex;
+	portInOutSet |= 0x01;
+	if ((DPDKINTEL_GENCFG.OpMode != IDS)) {
+		/* PortMap structure update with outport */
+		portMap [portMapIndex].outport = portIndex;
+		portInOutSet |= 0x02;
+	}
 
             if ((DPDKINTEL_GENCFG.OpMode != IDS) && (portInOutSet == 0x03))
             {
