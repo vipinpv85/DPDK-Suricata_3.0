@@ -1,5 +1,8 @@
 #define _GNU_SOURCE
 
+#include "dpdk-include-common.h"
+#include "source-dpdkintel.h"
+
 #include "suricata-common.h"
 #include "suricata.h"
 #include "conf.h"
@@ -20,8 +23,6 @@
 #include "host.h"
 
 
-#include "dpdk-include-common.h"
-#include "source-dpdkintel.h"
 
 extern uint8_t  portSpeed10;
 extern uint8_t  portSpeed100;
@@ -292,7 +293,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 {
     SCEnter();
 
-    unsigned int packet_q_len = 0, j;
+    unsigned int packet_q_len = 0, j, avail = 0;
     DpdkIntelThreadVars_t *ptv = (DpdkIntelThreadVars_t *)data;
     Packet *p = NULL;
     TmSlot *s = (TmSlot *)slot;
@@ -316,7 +317,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
         /* invoke rte_api for getting packets*/
         packet_q_len = rte_ring_dequeue_burst(srb[ptv->ringBuffId], 
                                               (void *)&rbQueue[ptv->ringBuffId],
-                                              /*64*/128);
+                                              /*64*/128, &avail);
         SCLogDebug("rte dequeue ringId: %d count: %d", ptv->ringBuffId, packet_q_len);
         /* ToDo: update counters - phase 2 */
         if (likely(packet_q_len)) {
@@ -647,6 +648,7 @@ TmEcode DecodeDpdkThreadDeinit(ThreadVars *tv, void *data)
 
 int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
 {
+    uint32_t freespace = 0;
     int32_t nb_rx = 0;
     int32_t enq = 0, ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
@@ -733,7 +735,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [inPort].enq_err++;
                             SCLogDebug(
@@ -750,7 +752,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [inPort].enq_err++;
                             SCLogDebug(
@@ -804,7 +806,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [outPort].enq_err++;
                             SCLogDebug(
@@ -822,7 +824,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [outPort].enq_err++;
                             SCLogDebug(
@@ -848,6 +850,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
 
 int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
 {
+    uint32_t freespace = 0;
     int32_t nb_rx = 0;
     int32_t enq = 0, ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
@@ -925,7 +928,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
                     SCLogDebug(
@@ -942,7 +945,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
                     SCLogDebug(
@@ -996,7 +999,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [outPort].enq_err++;
                     SCLogDebug(
@@ -1014,7 +1017,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1);
+                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [outPort].enq_err++;
                     SCLogDebug(
@@ -1035,6 +1038,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
 
 int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
 {
+    uint32_t freespace = 0;
     int32_t nb_rx = 0;
     int32_t enq = 0;
     int32_t ret = 0, j = 0;
@@ -1106,7 +1110,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              ringId, m->pkt_len, m);
 
-                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1);
+                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
                     SCLogDebug(
@@ -1124,7 +1128,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              ringId, m->pkt_len, m);
 
-                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1);
+                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
                     SCLogDebug(
@@ -1150,6 +1154,7 @@ int32_t ReceiveDpdkPkts_IPS(__attribute__((unused)) void *arg)
 int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 {
     SCLogNotice("Frame Parser for IDS Mode");
+    uint32_t freespace = 0;
     int32_t nb_rx = 0;
     int32_t enq = 0, portIndex;
     int32_t ret = 0, j = 0;
@@ -1229,7 +1234,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 
                     /* ToDo: update the stats under Debug mode */
 
-                    enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1);
+                    enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1, &freespace);
                     if (unlikely(enq != 1)) {
                         dpdkStats [portMap [portIndex].inport].enq_err++;
                         SCLogDebug(
@@ -1249,7 +1254,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 
                     /* ToDo: update the stats under Debug mode */
 
-                    enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1);
+                    enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1, &freespace);
                     if (unlikely(enq != 1)) {
                         dpdkStats [portMap [portIndex].inport].enq_err++;
                         SCLogDebug(
@@ -1380,18 +1385,18 @@ int32_t launchDpdkFrameParser(void)
         rte_eth_link_get(portMap[portIndex].inport, &linkSpeed);
 
         if ((portSpeed10 | portSpeed100) &&
-            ((linkSpeed.link_speed == ETH_LINK_SPEED_10) ||
-             (linkSpeed.link_speed == ETH_LINK_SPEED_100)) )
+            ((linkSpeed.link_speed == ETH_LINK_SPEED_10M) ||
+             (linkSpeed.link_speed == ETH_LINK_SPEED_100M)) )
         {
             portIndexBmp_10_100 =  portIndexBmp_10_100 | (1 << reqCores);
         }
         else if ((portSpeed10000) &&
-                 (linkSpeed.link_speed == ETH_LINK_SPEED_10G))
+                 (linkSpeed.link_speed == ETH_SPEED_NUM_10G))
         {
             portIndexBmp_10000 =  portIndexBmp_10000 | (1 << reqCores);
         }
         else if ((portSpeed1000) &&
-                 (linkSpeed.link_speed == ETH_LINK_SPEED_1000))
+                 (linkSpeed.link_speed == ETH_LINK_SPEED_1G))
         {
             portIndexBmp_1000 =  portIndexBmp_1000 | (1 << reqCores);
         }
@@ -1462,34 +1467,11 @@ int32_t launchDpdkFrameParser(void)
         SCLogNotice("DPDK Started in IPS Mode!!!");
     }
     else if (DPDKINTEL_GENCFG.OpMode == IDS) {
-#if 0
-        if (portIndexBmp_10_100)
-            rte_eal_remote_launch(ReceiveDpdkPkts_IDS_10_100, 
-                                  &portIndexBmp_10_100, cpuIndex);
-        if (portIndexBmp_1000)
-            rte_eal_remote_launch(ReceiveDpdkPkts_IDS_1000, 
-                                  /* port pair */NULL, cpuIndex);
-        if (portIndexBmp_10000)
-            rte_eal_remote_launch(ReceiveDpdkPkts_IDS_10000, 
-                                  &portIndexBmp_10000, cpuIndex);
-#endif
-        rte_eal_remote_launch(ReceiveDpdkPkts_IDS, NULL, cpuIndex);
+       rte_eal_remote_launch(ReceiveDpdkPkts_IDS, NULL, getCpuIndex());
         SCLogNotice("DPDK Started in IDS Mode!!!");
-
     }
     else if (DPDKINTEL_GENCFG.OpMode == BYPASS) {
-#if 0
-        if (portIndexBmp_10_100)
-            rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS_10_100, 
-                                  portIndexBmp_10_100, cpuIndex);
-        if (portIndexBmp_1000)
-            rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS_1000, 
-                                  /* port pair */, cpuIndex);
-        if (portIndexBmp_10000)
-            rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS_10000, 
-                                  portIndexBmp_10000, cpuIndex);
-#endif
-        rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS, NULL, cpuIndex);
+        rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS, NULL, getCpuIndex());
         SCLogNotice("DPDK Started in BYPASS Mode!!!");
     }
     return 0;

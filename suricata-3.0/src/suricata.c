@@ -21,6 +21,14 @@
  * \author Victor Julien <victor@inliniac.net>
  */
 
+#ifdef HAVE_DPDKINTEL
+#include "runmode-dpdkintel.h"
+#include "dpdk-include-common.h"
+#include "source-dpdkintel.h"
+
+extern file_config_t file_config;
+#endif
+
 #include "suricata-common.h"
 #include "config.h"
 
@@ -196,14 +204,6 @@
 #endif
 #include "util-storage.h"
 #include "host-storage.h"
-
-#ifdef HAVE_DPDKINTEL
-#include "runmode-dpdkintel.h"
-#include "dpdk-include-common.h"
-#include "source-dpdkintel.h"
-
-extern file_config_t file_config;
-#endif
 
 /*
  * we put this here, because we only use it here in main.
