@@ -3,7 +3,7 @@ Create simple DPDK RX-TX to allow packets into SURICATA processing pipeiline mod
 
 
 ## Purpose
-integrate dpdk PMD to suricata read method under worker mode
+integerate dpdk PMD to suricata read method under worker mode
 
 ## Implemented
  - Worker mode for IDS|IPS|BYPASS modes.
@@ -20,7 +20,7 @@ integrate dpdk PMD to suricata read method under worker mode
  1. Download the project zip and unzip the contents.
  2. Execute `cd DPDK-Suircata_3.0/suricata-3.0'.
  3. If DPDK enviroment variables (**RTE_TARGET & RTE_SDK**) are present, use `./configure --enable-dpdkintel` 
- 4. If DPDK is isntalled as package or custom build directory, use `./configure --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>`.
+ 4. If DPDK is installed as package or custom build directory, use `./configure --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>`.
  5. Result should be as below
  
  ```
@@ -79,7 +79,7 @@ Generic build parameters:
   PCAP_CFLAGS                               -I/usr/include
   SECCFLAGS
  ```
-5. Build with `make -j 10`
+5. Build suricata-dpdk with `make -j 10`
 
 ## Build Envirment
  - gcc: Ubuntu 7.3.0-27ubuntu1~18.04
@@ -155,21 +155,25 @@ Led for 5 sec.......
 ## Build Issues
 
 1. configure fails for iconv
+
 Answer> in ubuntu iconv header and libraries were missing. So follow steps below
-a. Fetch latest from `http://ftp.gnu.org/pub/gnu/libiconv/`
-b. untar content and `./configure; make; make install;`
-c. retry the configuration.
+- Fetch latest from `http://ftp.gnu.org/pub/gnu/libiconv/`
+- untar content and `./configure; make; make install;`
+- retry the configuration.
 
 2. Running application, complains about missing libiconv.so
-Answer> after issue 1, run `ldconfig -v`
+
+Answer> after issue 1, run `ldconfig -v`.
 
 3. Why is code not updated for new suricata?
-Answer> this is proof of concepts created 5 years back. If there more traction, new suricata and DPDK can be considered.
+
+Answer> this is proof of concepts created 5 years back and modififed to support DPDK 17.11.3. If there more traction and help from users, new suricata-dpdk with features enahancemnts can be considered.
 
 4. `PKG_CHECK_MODULES(DEPS, $pkg_modules)'
-Answer> may be depedency issue or failures. example libperl-dev & libgtk2.0-dev
 
-### Run Log
+Answer> may be depedency issue or failures. example libperl-dev & libgtk2.0-dev.
+
+### Run Log with dpdk 2.2.0
 ```
 # suricata --dpdkintel -c /etc/suricata/suricata.yaml 
 EAL: Detected lcore 0 as core 0 on socket 0
