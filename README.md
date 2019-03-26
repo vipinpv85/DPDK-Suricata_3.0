@@ -20,6 +20,9 @@ integerate dpdk PMD to suricata read method under worker mode
  1. Download the project zip and unzip the contents.
  2. Execute `cd DPDK-Suircata_3.0/suricata-3.0'.
  3. If DPDK enviroment variables (**RTE_TARGET & RTE_SDK**) are present, use `./configure --enable-dpdkintel` 
+ 
+ ***note: if there are build errors reporting for 'ld not found', please retry after running 'autoconf'
+ 
  4. If DPDK is installed as package or custom build directory, use `./configure --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>`.
  5. Result should be as below
  
