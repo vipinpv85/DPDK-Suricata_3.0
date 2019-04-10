@@ -82,6 +82,9 @@ int RunModeOutputFileEnabled(void);
 /* bool indicating if filedata logger is enabled */
 int RunModeOutputFiledataEnabled(void);
 
+#ifdef HAVE_DPDKINTEL
+#include "runmode-dpdkintel.h"
+#endif
 #include "runmode-pcap.h"
 #include "runmode-pcap-file.h"
 #include "runmode-pfring.h"
