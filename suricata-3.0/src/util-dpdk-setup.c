@@ -269,8 +269,8 @@ void dpdkConfSetup(void)
     if (ret < 0)
     {
         SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "DPDK IOPL init %d ", ret);
-        rte_panic("ERROR: Cannot init IOPL\n");
-        exit(EXIT_FAILURE);
+        //rte_panic("ERROR: Cannot init IOPL\n");
+        //exit(EXIT_FAILURE);
     }
 
     /* display default configuration */
