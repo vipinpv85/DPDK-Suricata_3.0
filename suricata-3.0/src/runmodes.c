@@ -219,9 +219,7 @@ void RunModeRegisterRunModes(void)
     RunModeIdsNflogRegister();
     RunModeTileMpipeRegister();
     RunModeUnixSocketRegister();
-#ifdef HAVE_DPDKINTEL
     RunModeDpdkIntelRegister();
-#endif /* HAVE_DPDKINTEL */
 #ifdef UNITTESTS
     UtRunModeRegister();
 #endif
