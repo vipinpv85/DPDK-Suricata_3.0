@@ -434,6 +434,18 @@ nflog:
     # netlink max buffer size
     max-size: 20000
 
+#dpdkintel support
+dpdkintel:
+
+  inputs:
+  - interface: 0000:09:00.0
+    copy-interface: 0000:0a:00.0
+  - interface: 0000:0a:00.0
+    copy-interface: 0000:09:00.0
+
+  # Select dpdk intel operation mode ips|ids|bypass
+  opmode: ips
+
 # af-packet support
 # Set threads to > 1 to use PACKET_FANOUT support
 af-packet:
