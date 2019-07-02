@@ -39,4 +39,7 @@ void EngineAnalysisFP(Signature *s, char *line);
 void EngineAnalysisRules(Signature *s, char *line);
 void EngineAnalysisRulesFailure(char *line, char *file, int lineno);
 
+#ifdef HAVE_DPDKINTEL
+void dpdkRuleAnalysis(Signature *s);
+#endif
 #endif /* __DETECT_ENGINE_ANALYZER_H__ */
