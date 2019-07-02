@@ -1385,8 +1385,8 @@ int32_t launchDpdkFrameParser(void)
         rte_eth_link_get(portMap[portIndex].inport, &linkSpeed);
 
         if ((portSpeed10 | portSpeed100) &&
-            ((linkSpeed.link_speed == ETH_LINK_SPEED_10M) ||
-             (linkSpeed.link_speed == ETH_LINK_SPEED_100M)) )
+            ((linkSpeed.link_speed == ETH_SPEED_NUM_10M) ||
+             (linkSpeed.link_speed == ETH_SPEED_NUM_100M)) )
         {
             portIndexBmp_10_100 =  portIndexBmp_10_100 | (1 << reqCores);
         }
@@ -1402,7 +1402,7 @@ int32_t launchDpdkFrameParser(void)
         }
         else
         {
-            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "Unknown speed for %u", reqCores);
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "Unknown speed (%u) for %u", linkSpeed.link_speed, reqCores);
             exit(EXIT_FAILURE);
         }
     }
