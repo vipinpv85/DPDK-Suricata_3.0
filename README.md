@@ -19,7 +19,7 @@ integerate dpdk PMD to suricata read method under worker mode
 ## How to build Suricata with DPDK?
  1. Download the project zip and unzip the contents.
  2. Execute `cd DPDK-Suircata_3.0/suricata-3.0'.
- 3. If DPDK enviroment variables (**RTE_TARGET & RTE_SDK**) are present, use `./configure --enable-dpdkintel` 
+ 3. If DPDK enviroment variables (**RTE_TARGET & RTE_SDK**) are present, use `./configure --enable-dpdkintel` or `./configure --sysconfdir=<mydesiredpath> --enable-dpdkintel`
  
  ***note: if there are build errors reporting for 'ld not found', please retry after running 'autoconf'
  
@@ -153,6 +153,53 @@ Led for 5 sec.......
 --- CPU NUMA node: 0
 --- PCI Addr: 0000:00:0a.0
 --- Status: Up
+```
+
+ - ./src/suricata -c suricata.yaml -s <myrules.rules> --dpdkintel
+ 
+```
+3/7/2019 -- 14:16:23 - <Notice> - DPDK Version: DPDK 17.11.3
+3/7/2019 -- 14:16:23 - <Notice> - ----- Global DPDK-INTEL Config -----
+3/7/2019 -- 14:16:23 - <Notice> -  Number Of Ports  : 2
+3/7/2019 -- 14:16:23 - <Notice> -  Operation Mode   : IPS
+3/7/2019 -- 14:16:23 - <Notice> -  Port:0, Map:0
+3/7/2019 -- 14:16:23 - <Notice> -  Port:0, Map:0
+3/7/2019 -- 14:16:23 - <Notice> - ------------------------------------
+^C3/7/2019 -- 14:16:25 - <Notice> - ----- Match Pattern ----
+3/7/2019 -- 14:16:25 - <Notice> -  * http:  0
+3/7/2019 -- 14:16:25 - <Notice> -  * ftp:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * tls:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * dns:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * smtp:  0
+3/7/2019 -- 14:16:25 - <Notice> -  * ssh:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * smb:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * smb2:  0
+3/7/2019 -- 14:16:25 - <Notice> -  * dcerpc:0
+3/7/2019 -- 14:16:25 - <Notice> -  * tcp:   815
+3/7/2019 -- 14:16:25 - <Notice> -  * udp:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * sctp:  0
+3/7/2019 -- 14:16:25 - <Notice> -  * icmpv6:0
+3/7/2019 -- 14:16:25 - <Notice> -  * gre:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * raw:   0
+3/7/2019 -- 14:16:25 - <Notice> -  * ipv4:  0
+3/7/2019 -- 14:16:25 - <Notice> -  * ipv6:  0
+3/7/2019 -- 14:16:25 - <Notice> - -----------------------
+3/7/2019 -- 14:16:25 - <Notice> - all 2 packet processing threads, 4 management threads initialized, engine started.
+^C^C
+3/7/2019 -- 14:17:33 - <Notice> - DPDK Started in IPS Mode!!!
+3/7/2019 -- 14:17:33 - <Notice> - Signal Received.  Stopping engine.
+3/7/2019 -- 14:17:34 - <Notice> - Intf : 0
+3/7/2019 -- 14:17:34 - <Notice> -  + ring full 0, enq err 0, tx err 0, Packet alloc fail 0, Packet Process Fail 0
+3/7/2019 -- 14:17:34 - <Notice> -  + Errors RX: 0 TX: 0 Mbuff: 0
+3/7/2019 -- 14:17:34 - <Notice> -  + Queue Dropped pkts: 0
+3/7/2019 -- 14:17:34 - <Notice> -  ----------------------------------------------------------
+3/7/2019 -- 14:17:34 - <Notice> - Intf : 0
+3/7/2019 -- 14:17:34 - <Notice> -  + ring full 0, enq err 0, tx err 0, Packet alloc fail 0, Packet Process Fail 0
+3/7/2019 -- 14:17:34 - <Notice> -  + Errors RX: 0 TX: 0 Mbuff: 0
+3/7/2019 -- 14:17:34 - <Notice> -  + Queue Dropped pkts: 0
+3/7/2019 -- 14:17:34 - <Notice> -  ----------------------------------------------------------
+3/7/2019 -- 14:17:34 - <Notice> - Stats for '0000:09:00.0':  pkts: 0, drop: 0 (-nan%), invalid chksum: 0
+3/7/2019 -- 14:17:34 - <Notice> - Stats for '0000:0a:00.0':  pkts: 0, drop: 0 (-nan%), invalid chksum: 0
 ```
 
 ## Build Issues
