@@ -157,7 +157,7 @@ Led for 5 sec.......
 
  - ./src/suricata -c suricata.yaml -s <myrules.rules> --dpdkintel
  
-`
+```
 3/7/2019 -- 14:16:23 - <Notice> - DPDK Version: DPDK 17.11.3
 3/7/2019 -- 14:16:23 - <Notice> - ----- Global DPDK-INTEL Config -----
 3/7/2019 -- 14:16:23 - <Notice> -  Number Of Ports  : 2
@@ -200,7 +200,7 @@ Led for 5 sec.......
 3/7/2019 -- 14:17:34 - <Notice> -  ----------------------------------------------------------
 3/7/2019 -- 14:17:34 - <Notice> - Stats for '0000:09:00.0':  pkts: 0, drop: 0 (-nan%), invalid chksum: 0
 3/7/2019 -- 14:17:34 - <Notice> - Stats for '0000:0a:00.0':  pkts: 0, drop: 0 (-nan%), invalid chksum: 0
-`
+```
 
 ## Build Issues
 
