@@ -276,8 +276,10 @@ const char * TmModuleTmmIdToString(TmmId id)
         CASE_CODE (TMM_RECEIVENETMAP);
         CASE_CODE (TMM_DECODENETMAP);
         CASE_CODE (TMM_TLSSTORE);
+#ifdef HAVE_DPDKINTEL
         CASE_CODE (TMM_RECEIVEDPDK);
         CASE_CODE (TMM_DECODEDPDK);
+#endif
 
         CASE_CODE (TMM_SIZE);
     }

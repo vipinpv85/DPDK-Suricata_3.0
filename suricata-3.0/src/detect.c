@@ -365,6 +365,9 @@ static int DetectLoadSigFile(DetectEngineCtx *de_ctx, char *sig_file,
             }
             SCLogDebug("signature %"PRIu32" loaded", sig->id);
             good++;
+#ifdef HAVE_DPDKINTEL
+            dpdkRuleAnalysis(sig);
+#endif
         } else {
             SCLogError(SC_ERR_INVALID_SIGNATURE, "error parsing signature \"%s\" from "
                  "file %s at line %"PRId32"", line, sig_file, lineno - multiline);
