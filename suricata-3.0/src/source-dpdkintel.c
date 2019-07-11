@@ -584,7 +584,7 @@ TmEcode DecodeDpdk(ThreadVars *tv, Packet *p, void *data, PacketQueue *pq, Packe
         return TM_ECODE_OK;
 
     /* update counters */
-    StatsIncr(dtv->counter_pkts, tv->sc_perf_pca);
+    StatsIncr(tv, dtv->counter_pkts);
 //    SCPerfCounterIncr(dtv->counter_pkts_per_sec, tv->sc_perf_pca);
 
     StatsAddUI64(dtv->counter_bytes, tv->sc_perf_pca, GET_PKT_LEN(p));
@@ -599,7 +599,7 @@ TmEcode DecodeDpdk(ThreadVars *tv, Packet *p, void *data, PacketQueue *pq, Packe
 
     /* If suri has set vlan during reading, we increase vlan counter */
     if (p->vlan_idx) {
-        StatsIncr(dtv->counter_vlan, tv->sc_perf_pca);
+        StatsIncr(tv, dtv->counter_vlan);
     }
 
     DecodeEthernet(tv, dtv, p, ((uint8_t *)dptr->buf_addr + dptr->data_off), dptr->pkt_len, pq);
