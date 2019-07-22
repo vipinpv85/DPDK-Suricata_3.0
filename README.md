@@ -42,11 +42,6 @@ autoconf
  - OS: 4.15.0-46-generic
  - debian version: Ubuntu 18.04.2 LTS
 
-## Tested Enviroments
- - Host Machine
- - Guest Machine with PCIe pass through
- - Guest Machine with vhost-pci and OVS
- - Dockers with whitelisted interface
 
 ## Test Run: 
 
