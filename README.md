@@ -109,7 +109,7 @@ Generic build parameters:
  - [ ] with eventdev for Load Balancer for parallel, ordered and atomic flow
  - [ ] pre-parse and ACL table lookup
  - [ ] integrate hyperscan lookup with pattern|packet matching (https://github.com/vipinpv85/DPDK-HYPERSCAN-SAMPL)
- - [ ] support for DPDK 17.005 or greater.
+ - [ ] support for DPDK 18.11.3 or greater.
  
  ### extra
  - runmode-dpdkintel.c - updated check for IDS modes
