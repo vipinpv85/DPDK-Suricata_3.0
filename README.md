@@ -44,68 +44,9 @@ autoconf
 autoconf
 ./configure --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib> or ./configure --sysconfdir=<mydesiredpath> --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>
  ```
-  
- 5. Result should be as below
- 
- ```
- Suricata Configuration:
-  AF_PACKET support:                       no
-  DPDK_INTEL support:                      yes
-  PF_RING support:                         no
-  NFQueue support:                         no
-  NFLOG support:                           no
-  IPFW support:                            no
-  Netmap support:                          no
-  DAG enabled:                             no
-  Napatech enabled:                        no
+4. Build suricata-dpdk with `make -j 10`
 
-  Unix socket enabled:                     no
-  Detection enabled:                       yes
-
-  libnss support:                          no
-  libnspr support:                         no
-  libjansson support:                      no
-  hiredis support:                         no
-  Prelude support:                         no
-  PCRE jit:                                yes
-  LUA support:                             no
-  libluajit:                               no
-  libgeoip:                                no
-  Non-bundled htp:                         no
-  Old barnyard2 support:                   no
-  CUDA enabled:                            no
-
-  Suricatasc install:                      yes
-
-  Unit tests enabled:                      no
-  Debug output enabled:                    no
-  Debug validation enabled:                no
-  Profiling enabled:                       no
-  Profiling locks enabled:                 no
-  Coccinelle / spatch:                     no
-
-Generic build parameters:
-  Installation prefix:                     /usr/local
-  Configuration directory:                 /usr/local/etc/suricata/
-  Log directory:                           /usr/local/var/log/suricata/
-
-  --prefix                                 /usr/local
-  --sysconfdir                             /usr/local/etc
-  --localstatedir                          /usr/local/var
-
-  Host:                                    x86_64-unknown-linux-gnu
-  Compiler:                                gcc (exec name) / gcc (real)
-  GCC Protect enabled:                     no
-  GCC march native enabled:                yes
-  GCC Profile enabled:                     no
-  Position Independent Executable enabled: no
-  CFLAGS                                   -g -O2 -march=native -DHAVE_DPDKINTEL
-  PCAP_CFLAGS                               -I/usr/include
-  SECCFLAGS
- ```
-5. Build suricata-dpdk with `make -j 10`
-
-## Build Envirment
+## Build Enviroment
  - gcc: Ubuntu 7.3.0-27ubuntu1~18.04
  - OS: 4.15.0-46-generic
  - debian version: Ubuntu 18.04.2 LTS
@@ -115,15 +56,6 @@ Generic build parameters:
  - Guest Machine with PCIe pass through
  - Guest Machine with vhost-pci and OVS
  - Dockers with whitelisted interface
-
-## Related Links
-
-### Use cases
- - https://www.slideshare.net/vipinpv85/dpdk-iot-packet-analyzer
- - https://www.slideshare.net/vipinpv85/porting-idsips-to-work-with-dpdk
-
-### framework overview
-- https://www.slideshare.net/vipinpv85/dpdk-frame-pipeline-for-ips-ids-suricata
 
 # Future work
  - [ ] on dockers with vhost user
@@ -140,44 +72,12 @@ Generic build parameters:
  - util-running-modes.c - updated for single numa node instances
 
 ## Test Run: 
+
+```
+ - ./src/suricata --list-runmodes
  - ./src/suricata --list-dpdkintel-ports
-
-```
-
---- DPDK Intel Ports ---
-
-Overall Ports: 4
-
--- Port: 0
---- MTU: 1500
---- MAX RX MTU: 9728
---- Driver: rte_virtio_pmd
---- Index: 0
---- Queues RX 1 & TX 1
---- SRIOV VF: 0
---- Offload RX: 0 TX: 0
---- CPU NUMA node: 0
---- PCI Addr: 0000:00:09.0
---- Status: Up
-Led for 5 sec.......
-
--- Port: 1
---- MTU: 1500
---- MAX RX MTU: 9728
---- Driver: rte_virtio_pmd
---- Index: 0
---- Queues RX 1 & TX 1
---- SRIOV VF: 0
---- Offload RX: 0 TX: 0
---- CPU NUMA node: 0
---- PCI Addr: 0000:00:0a.0
---- Status: Up
-```
-
-```
- - ./src/suricata -c suricata.yaml -s <myrules.rules> --dpdkintel
+ - ./src/suricata -c suricata.yaml -s <myrules.rules or user desired rules> --dpdkintel
  ```
-
 
 ## Build Issues
 
@@ -199,9 +99,3 @@ Answer> this is proof of concepts created 5 years back and modififed to support 
 4. `PKG_CHECK_MODULES(DEPS, $pkg_modules)'
 
 Answer> may be depedency issue or failures. example libperl-dev & libgtk2.0-dev.
-
-### Run Log with dpdk 2.2.0
-```
-# suricata --dpdkintel -c /etc/suricata/suricata.yaml 
-
-```
