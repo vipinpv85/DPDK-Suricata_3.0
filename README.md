@@ -122,8 +122,6 @@ Generic build parameters:
  - ./src/suricata --list-dpdkintel-ports
 
 ```
-EAL: PCI memory mapped at 0x7fd772a03000
-EAL: PCI Port IO found start=0xc180
 
 --- DPDK Intel Ports ---
 
