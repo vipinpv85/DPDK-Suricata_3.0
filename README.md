@@ -23,21 +23,33 @@ integerate dpdk PMD to suricata read method under worker mode
  
 1. Download the project zip and unzip the contents.
 2. If DPDK enviroment variables (**RTE_TARGET & RTE_SDK**) 
- a. are present:
+
 ```
+a. are present:
 cd DPDK-Suircata_3.0/suricata-3.0
 autoconf
+./configure --enable-dpdkintel or ./configure --enable-dpdkintel
+
+or
+
 ./configure --enable-dpdkintel or ./configure --sysconfdir=<mydesiredpath> --enable-dpdkintel
 ```
- b. not present and package installed as distribution.
+
+
  ```
- cd DPDK-Suircata_3.0/suricata-3.0
+b. not present and package installed as distribution. 
+cd DPDK-Suircata_3.0/suricata-3.0
 autoconf
-./configure --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib> or ./configure --sysconfdir=<mydesiredpath> --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>
+./configure --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>
+
+or 
+
+./configure --sysconfdir=<mydesiredpath> --enable-dpdkintel --with-libdpdkintel-includes=<path to  dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>
  ```
-3. Build suricata-dpdk with `make -j 10`
+ 5. Build suricata-dpdk with `make -j 10`
 
 ## Build Enviroment
+
  - gcc: Ubuntu 7.3.0-27ubuntu1~18.04
  - OS: 4.15.0-46-generic
  - debian version: Ubuntu 18.04.2 LTS
