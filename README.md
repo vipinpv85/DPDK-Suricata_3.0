@@ -62,3 +62,38 @@ or
  - ./src/suricata --list-dpdkintel-ports
  - ./src/suricata -c suricata.yaml -s <myrules.rules or user desired rules> --dpdkintel
  ```
+ 
+ ## Configuration
+ 
+ 1. IDS
+ 
+ ```
+ #dpdkintel support
+dpdkintel:
+
+   inputs:
+      - interface: <pcie-addr-1>
+        copy-interface: <pcie-addr-1>
+      - interface: <pcie-addr-2>
+        copy-interface: <pcie-addr-2>      
+
+ # Select dpdk intel operation mode ips|ids|bypass
+        opmode: ids
+ ```
+
+2. IPS
+
+
+ ```
+ #dpdkintel support
+dpdkintel:
+
+   inputs:
+      - interface: <pcie-addr-1>
+        copy-interface: <pcie-addr-2>
+      - interface: <pcie-addr-2>
+        copy-interface: <pcie-addr-1>      
+
+ # Select dpdk intel operation mode ips|ids|bypass
+        opmode: ips
+ ```
