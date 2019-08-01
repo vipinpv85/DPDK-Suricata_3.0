@@ -52,13 +52,14 @@ const char *RunModeDpdkIntelGetDefaultMode(void)
 
 void RunModeDpdkIntelRegister(void)
 {
+#ifdef HAVE_DPDKINTEL
     default_mode = "workers";
     RunModeRegisterNewRunMode(RUNMODE_DPDKINTEL, "workers",
             "Workers DpdkIntel mode, each thread does all"
             " tasks from decoding to logging. Acquistion is "
             " done by seperate core per interface",
             RunModeDpdkIntelWorkers);
-    return;
+#endif /* HAVE_DPDKINTEL */
 }
 
 int DpdkIntelRegisterDeviceStreams()
@@ -117,16 +118,21 @@ void ParseDpdkConfig(void)
     }
     /* get for each device in list to populate the copy interface */
     SCLogDebug(" Dev Count: %d", LiveGetDeviceCount());
-    SCLogDebug(" Devices: ");
     for (index = 0; index < LiveGetDeviceCount(); index++)
     {
         iface = LiveGetDeviceName(index);
-        SCLogDebug(" Device Name: %s", iface);
+        SCLogInfo(" Device Name: %s", iface);
         ifroot = ConfNodeLookupKeyValue(ifnode, "interface", iface);
         if (ifroot == NULL) {
             SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "Unable to find device %s",
                                                         iface);
             return;
+        }
+        /* check if interface lies within limits */
+        if( (atoi(iface) < 0) && (atoi(iface) > portTotal)) {
+                SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "iface %s does not lie within DPDK total ports %d",
+                                                            iface, portTotal);
+                return;
         }
 
         if (DPDKINTEL_GENCFG.OpMode != IDS) {
@@ -136,30 +142,27 @@ void ParseDpdkConfig(void)
                 return;
 
             }
-            SCLogDebug(" copy-interface %s", oface);
+            SCLogInfo(" copy-interface %s", oface);
 
             if (!strcmp(iface, oface)) {
                 SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "in and out interface cannot be same %s <--> %s",
                                                             iface, oface);
                 return;
             }
-        }
-
-        for (portIndex = 0; portIndex < portTotal; portIndex++) {
-            memset(&dev_info, 0x00, sizeof(struct rte_eth_dev_info));
-
-            rte_eth_dev_info_get (portIndex, &dev_info);
-            if (NULL == dev_info.pci_dev) {
-                SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "port %d PCI is NULL!",
-                           portIndex);
+            /* check if copy-interface lies within limits */
+            if ((atoi(oface) < 0) && (atoi(oface) > portTotal)) {
+                SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "oface %s does not lie within DPDK total ports %d",
+                                                            oface, portTotal);
                 return;
             }
+        }
 
-	portMap [portMapIndex].inport = portIndex;
+        {
+	portMap [portMapIndex].inport = atoi(iface);
 	portInOutSet |= 0x01;
 	if ((DPDKINTEL_GENCFG.OpMode != IDS)) {
 		/* PortMap structure update with outport */
-		portMap [portMapIndex].outport = portIndex;
+		portMap [portMapIndex].outport = atoi(oface);
 		portInOutSet |= 0x02;
 	}
 
@@ -168,21 +171,20 @@ void ParseDpdkConfig(void)
                 //portMap [portMapIndex].ringid = DPDKINTEL_GENCFG.Port;
                 portMap [portMapIndex].ringid = portMap [portMapIndex].inport;
                 DPDKINTEL_GENCFG.Port += 1;
-                SCLogDebug("PortMap : Inport: %u OutPort: %u  ringid %u",
+                SCLogInfo("PortMap : Inport: %u OutPort: %u  ringid %u",
                          portMap [portMapIndex].inport,
                          portMap [portMapIndex].outport,
                          portMap [portMapIndex].ringid
                          );
                 portInOutSet = 0x00;
                 portMapIndex++;
-                break;
             }
             else if ((DPDKINTEL_GENCFG.OpMode == IDS) && (portInOutSet == 0x01))
             {
                 //portMap [portMapIndex].ringid = DPDKINTEL_GENCFG.Port;
                 portMap [portMapIndex].ringid = portMap [portMapIndex].inport;
                 DPDKINTEL_GENCFG.Port += 1;
-                SCLogDebug("PortMap : Inport: %u OutPort: %u  ringid %u",
+                SCLogInfo("PortMap : Inport: %u OutPort: %u  ringid %u",
                          portMap [portMapIndex].inport,
                          portMap [portMapIndex].outport,
                          portMap [portMapIndex].ringid
@@ -190,6 +192,8 @@ void ParseDpdkConfig(void)
                 portInOutSet = 0x00;
                 portMapIndex++;
             }
+            else
+               SCLogInfo("never happen!!!!");
 
         }
     }
