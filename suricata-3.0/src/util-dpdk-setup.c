@@ -27,7 +27,7 @@ uint8_t  portSpeed10000;
 uint8_t  portSpeedUnknown;
 uint8_t  dpdkIntelCoreCount = 0;
 struct   rte_ring *srb [16];
-char* argument[EAL_ARGS] = {"suricata","-c","f","-n","2", "--", "-P", "-p", "15", "--huge-dir", "/mnt/huge", NULL};
+char* argument[EAL_ARGS] = {"suricata","-c","0x1e", "--", "-P", "-p", "15", NULL};
 file_config_t  file_config;
 struct rte_mempool * dp_pktmbuf_pool = NULL;
 DpdkIntelPortMap portMap [16];

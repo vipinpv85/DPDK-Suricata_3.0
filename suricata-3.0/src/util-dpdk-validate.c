@@ -27,6 +27,10 @@ int32_t validateMap(void)
     uint8_t index, outIndex;
 //    uint16_t mapArray = 0;
 
+    if (DPDKINTEL_GENCFG.OpMode == IDS) {
+        SCLogDebug("Validate skipped for IDS");
+        return XS_SUCCESS;
+    }
 
     for (index = 0; index < portTotal; index++)
     {

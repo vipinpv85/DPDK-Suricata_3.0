@@ -33,8 +33,12 @@
 #define TRUE   1
 #define FALSE  0
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+#ifndef __USE_GNU
 #define __USE_GNU
+#endif
 
 #if HAVE_CONFIG_H
 #include <config.h>
