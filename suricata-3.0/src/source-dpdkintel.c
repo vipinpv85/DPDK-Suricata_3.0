@@ -1389,7 +1389,7 @@ int32_t launchDpdkFrameParser(void)
             portIndexBmp_10_100 =  portIndexBmp_10_100 | (1 << reqCores);
         else if(linkSpeed.link_speed == ETH_SPEED_NUM_10G)
             portIndexBmp_10000 =  portIndexBmp_10000 | (1 << reqCores);
-        else if (linkSpeed.link_speed == ETH_LINK_SPEED_1G)
+        else if (linkSpeed.link_speed == ETH_LINK_NUM_1G)
             portIndexBmp_1000 =  portIndexBmp_1000 | (1 << reqCores);
         else
         {
