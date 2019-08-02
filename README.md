@@ -72,10 +72,10 @@ or
 dpdkintel:
 
    inputs:
-      - interface: <pcie-addr-1>
-        copy-interface: <pcie-addr-1>
-      - interface: <pcie-addr-2>
-        copy-interface: <pcie-addr-2>      
+      - interface: 0
+        copy-interface: <dummy value>
+      - interface: 1
+        copy-interface: <dummy value>
 
  # Select dpdk intel operation mode ips|ids|bypass
         opmode: ids
@@ -89,10 +89,10 @@ dpdkintel:
 dpdkintel:
 
    inputs:
-      - interface: <pcie-addr-1>
-        copy-interface: <pcie-addr-2>
-      - interface: <pcie-addr-2>
-        copy-interface: <pcie-addr-1>      
+      - interface: 0
+        copy-interface: 1
+      - interface: 1
+        copy-interface: 0
 
  # Select dpdk intel operation mode ips|ids|bypass
         opmode: ips
