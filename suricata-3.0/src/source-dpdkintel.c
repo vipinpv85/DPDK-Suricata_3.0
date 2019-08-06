@@ -324,15 +324,13 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
         if (likely(packet_q_len)) {
             /*printf("rte dequeue count: %d", packet_q_len);*/
             for (j = 0; ((j < PREFETCH_OFFSET) && (j < packet_q_len)); j++) {
-                //rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j], void *));
-                rte_prefetch0(rbQueue[ptv->ringBuffId][j]);
+                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j], void *));
             }
 
             for (j = 0; j < (packet_q_len - PREFETCH_OFFSET); j++) {
                 struct rte_mbuf *tmp = rbQueue[ptv->ringBuffId][j];
                 /* Prefetch others and process prev prefetched packets */
-                //rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET], void *));
-                rte_prefetch0(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET]);
+                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET], void *));
 
                 SCLogDebug(" User data %"PRIx64, tmp->udata64);
 
@@ -1177,9 +1175,9 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 
 
     while(1) {
-        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
-            for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
-            {
+        for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
+        {
+            if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
                 if (0 == rte_eth_stats_get(portMap [portIndex].inport, &stats)) {
                     SCLogNotice("IDS port %u", portMap [portIndex].inport);
                     SCLogNotice(" - pkts: RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
@@ -1192,20 +1190,16 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                                 dpdkStats[portMap [portIndex].inport].sc_pkt_null,
                                 dpdkStats[portMap [portIndex].inport].sc_fail);
                 }
+                SCReturnInt(TM_ECODE_OK);
             }
 
-            SCReturnInt(TM_ECODE_OK);
-        }
-
-        for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
-        {
             nb_rx = rte_eth_rx_burst(portMap [portIndex].inport, 0, pkts_burst, MAX_PKT_BURST);
             if (likely(nb_rx > 0)) {
                 SCLogDebug("IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
 
                 if (unlikely(stats_matchPattern.totalRules == 0))
                 {
-                    SCLogNotice("No rules matched for IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
+                    SCLogDebug("No rules matched for IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
                     ret = 0;
                     while (ret < nb_rx)
                     {
@@ -1225,13 +1219,11 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                 }
 
                 for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
-                    //rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
                     rte_prefetch0(pkts_burst[j]);
                 }
 
                 for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
                     struct rte_mbuf *m = pkts_burst[j];
-                    //rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
                     rte_prefetch0(pkts_burst[j + PREFETCH_OFFSET]);
 
                     SCLogDebug("add frame to RB %u len %d for %p",
