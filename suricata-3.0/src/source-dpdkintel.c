@@ -184,12 +184,11 @@ static inline void DpdkIntelDumpCounters(DpdkIntelThreadVars_t *ptv)
     SCLogDebug(" Interface to Dump Stats & Err is %u", ptv->inIfaceId);
 
     SCLogNotice("Intf : %u", ptv->inIfaceId);
-    SCLogNotice(" + ring full %"PRIu64", enq err %"PRIu64
-                ", tx err %"PRIu64", Packet alloc fail %"PRIu64
-                ", Packet Process Fail %"PRIu64,
+    SCLogNotice(" + ring full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
                  dpdkStats [portMap [ptv->inIfaceId].inport].ring_full,
                  dpdkStats [portMap [ptv->inIfaceId].inport].enq_err,
-                 dpdkStats [portMap [ptv->inIfaceId].outport].tx_err,
+                 dpdkStats [portMap [ptv->inIfaceId].outport].tx_err);
+    SCLogNotice(" + fail: Packet alloc %"PRIu64", Fail %"PRIu64,
                  dpdkStats [portMap [ptv->inIfaceId].inport].sc_pkt_null,
                  dpdkStats [portMap [ptv->inIfaceId].inport].sc_fail);
 
@@ -266,8 +265,10 @@ TmEcode DpdkSendFrame(struct rte_mbuf *m, uint8_t port, uint16_t num)
 
     ret = rte_eth_tx_burst(port, (uint16_t) queueid, &m, num);
     if (unlikely(ret < num)) {
-        SCLogNotice(SC_ERR_PORT_ENGINE_GENERIC, "Failed to send Packet %d", ret);
-        rte_pktmbuf_free(m);
+        SCLogDebug("Failed to send Packet %d", ret);
+        do {
+            rte_pktmbuf_free(m);
+        } while(++ret < num);
         return TM_ECODE_FAILED;
     }
 
@@ -333,7 +334,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                 //rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET], void *));
                 rte_prefetch0(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET]);
 
-                SCLogDebug(" User data %x ", tmp->udata64);
+                SCLogDebug(" User data %"PRIx64, tmp->udata64);
 
                 p = DpdkIntelProcessPacket(ptv, tmp);
                 if (NULL == p) {
@@ -373,7 +374,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
             for (; j < packet_q_len; j++) {
                 struct rte_mbuf *tmp = rbQueue[ptv->ringBuffId][j];
 
-                SCLogDebug(" User data %x ", tmp->udata64);
+                SCLogDebug(" User data %"PRIx64, tmp->udata64);
 
                 p = DpdkIntelProcessPacket(ptv, tmp);
                 if (NULL == p) {
@@ -710,8 +711,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         {
                             dpdkStats [outPort].tx_err += (nb_rx - ret);
 
-                            SCLogDebug(SC_ERR_DPDKINTEL_DPDKAPI, 
-                                          "Failed to send Packet %d ret : %d",
+                            SCLogDebug(" Failed to send Packet %d ret : %d",
                                           outPort, ret);
 
                             for (; ret < nb_rx; ret++)
@@ -781,8 +781,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         {
                             dpdkStats [inPort].tx_err += (nb_rx - ret);
 
-                            SCLogDebug(SC_ERR_DPDKINTEL_DPDKAPI, 
-                                          "Failed to send Packet %d ret : %d",
+                            SCLogDebug(" Failed to send Packet %d ret : %d",
                                           inPort, ret);
 
                             for (; ret < nb_rx; ret++)
@@ -903,8 +902,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 {
                     dpdkStats [outPort].tx_err += (nb_rx - ret);
 
-                    SCLogDebug(SC_ERR_DPDKINTEL_DPDKAPI, 
-                                           "Failed to send Packet %d ret : %d",
+                    SCLogDebug(" Failed to send Packet %d ret : %d",
                                             outPort, ret);
 
                     for (; ret < nb_rx; ret++)
@@ -974,8 +972,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 {
                     dpdkStats [inPort].tx_err += (nb_rx - ret);
 
-                    SCLogDebug(SC_ERR_DPDKINTEL_DPDKAPI, 
-                                           "Failed to send Packet %d ret : %d",
+                    SCLogDebug(" Failed to send Packet %d ret : %d",
                                             inPort, ret);
 
                     for (; ret < nb_rx; ret++)
@@ -1087,8 +1084,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 {
                     dpdkStats [outPort].tx_err += (nb_rx - ret);
 
-                    SCLogDebug(SC_ERR_DPDKINTEL_DPDKAPI, 
-                                           "Failed to send Packet %d ret : %d",
+                    SCLogDebug("Failed to send Packet %d ret : %d",
                                             outPort, ret);
 
                     for (; ret < nb_rx; ret++)
@@ -1185,14 +1181,14 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
             for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
             {
                 if (0 == rte_eth_stats_get(portMap [portIndex].inport, &stats)) {
-                    SCLogNotice("IDS port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64
-                                "ring full %"PRIu64" enq err %"PRIu64" tx err %"PRIu64
-                                "SC Pkt fail %"PRIu64" SC Process Fail %"PRIu64,
-                                portMap [portIndex].inport, stats.ipackets, 
-                                stats.opackets, stats.imissed,
+                    SCLogNotice("IDS port %u", portMap [portIndex].inport);
+                    SCLogNotice(" - pkts: RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
+                            stats.ipackets, stats.opackets, stats.imissed);
+                    SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
                                 dpdkStats [portMap [portIndex].inport].ring_full,
                                 dpdkStats[portMap [portIndex].inport].enq_err,
-                                dpdkStats[portMap [portIndex].outport].tx_err,
+                                dpdkStats[portMap [portIndex].outport].tx_err);
+                    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
                                 dpdkStats[portMap [portIndex].inport].sc_pkt_null,
                                 dpdkStats[portMap [portIndex].inport].sc_fail);
                 }
@@ -1320,8 +1316,7 @@ int32_t ReceiveDpdkPkts_BYPASS(__attribute__((unused)) void *arg)
                 {
                     /* Update Counters */
                     dpdkStats [portMap [portIndex].outport].tx_err += (nb_rx - ret);
-                    SCLogDebug(SC_ERR_DPDKINTEL_DPDKAPI, 
-                               "Failed to send Packet %d ret : %d", 
+                    SCLogDebug("Failed to send Packet %d ret : %d", 
                                portMap [portIndex].outport, ret);
                     for (; ret < nb_rx; ret++)
                     {

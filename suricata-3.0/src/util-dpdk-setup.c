@@ -121,7 +121,6 @@ int32_t dpdkIntelDevSetup(void)
         return -1;
     }
     SCLogDebug(" - DPDK ports %d config-file ports %d", portTotal, DPDKINTEL_GENCFG.Port);
-    SCLogDebug(" - config-file ports bit map %x", index);
 
     dp_pktmbuf_pool =
              rte_mempool_create("mbuf_pool", NB_MBUF,
