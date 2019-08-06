@@ -266,7 +266,7 @@ TmEcode DpdkSendFrame(struct rte_mbuf *m, uint8_t port, uint16_t num)
 
     ret = rte_eth_tx_burst(port, (uint16_t) queueid, &m, num);
     if (unlikely(ret < num)) {
-        SCLogDebug(SC_ERR_PORT_ENGINE_GENERIC, "Failed to send Packet %d", ret);
+        SCLogNotice(SC_ERR_PORT_ENGINE_GENERIC, "Failed to send Packet %d", ret);
         rte_pktmbuf_free(m);
         return TM_ECODE_FAILED;
     }
@@ -293,7 +293,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 {
     SCEnter();
 
-    unsigned int packet_q_len = 0, j, avail = 0;
+    int packet_q_len = 0, j, avail = 0;
     DpdkIntelThreadVars_t *ptv = (DpdkIntelThreadVars_t *)data;
     Packet *p = NULL;
     TmSlot *s = (TmSlot *)slot;
@@ -323,13 +323,15 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
         if (likely(packet_q_len)) {
             /*printf("rte dequeue count: %d", packet_q_len);*/
             for (j = 0; ((j < PREFETCH_OFFSET) && (j < packet_q_len)); j++) {
-                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j], void *));
+                //rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j], void *));
+                rte_prefetch0(rbQueue[ptv->ringBuffId][j]);
             }
 
             for (j = 0; j < (packet_q_len - PREFETCH_OFFSET); j++) {
                 struct rte_mbuf *tmp = rbQueue[ptv->ringBuffId][j];
                 /* Prefetch others and process prev prefetched packets */
-                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET], void *));
+                //rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET], void *));
+                rte_prefetch0(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET]);
 
                 SCLogDebug(" User data %x ", tmp->udata64);
 
@@ -587,15 +589,18 @@ TmEcode DecodeDpdk(ThreadVars *tv, Packet *p, void *data, PacketQueue *pq, Packe
     StatsIncr(tv, dtv->counter_pkts);
 //    SCPerfCounterIncr(dtv->counter_pkts_per_sec, tv->sc_perf_pca);
 
-    StatsAddUI64(dtv->counter_bytes, tv->sc_perf_pca, GET_PKT_LEN(p));
+    //StatsAddUI64(dtv->counter_bytes, tv->sc_perf_pca, GET_PKT_LEN(p));
+    StatsAddUI64(tv, dtv->counter_bytes, GET_PKT_LEN(p));
 #if 0
     SCPerfCounterAddDouble(dtv->counter_bytes_per_sec, tv->sc_perf_pca, GET_PKT_LEN(p));
     SCPerfCounterAddDouble(dtv->counter_mbit_per_sec, tv->sc_perf_pca,
                            (GET_PKT_LEN(p) * 8)/1000000.0 );
 #endif
 
-    StatsAddUI64(dtv->counter_avg_pkt_size, tv->sc_perf_pca, GET_PKT_LEN(p));
-    StatsSetUI64(dtv->counter_max_pkt_size, tv->sc_perf_pca, GET_PKT_LEN(p));
+    //StatsAddUI64(dtv->counter_avg_pkt_size, tv->sc_perf_pca, GET_PKT_LEN(p));
+    //StatsSetUI64(dtv->counter_max_pkt_size, tv->sc_perf_pca, GET_PKT_LEN(p));
+    StatsAddUI64(tv, dtv->counter_avg_pkt_size, GET_PKT_LEN(p));
+    StatsSetUI64(tv, dtv->counter_max_pkt_size, GET_PKT_LEN(p));
 
     /* If suri has set vlan during reading, we increase vlan counter */
     if (p->vlan_idx) {
@@ -669,7 +674,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
         uint8_t index = 0x00;
         uint16_t tmpMap = portBmpMap;
 
-        if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             while (tmpMap) 
             {
                 if (tmpMap & 0x01) {
@@ -1154,6 +1159,7 @@ int32_t ReceiveDpdkPkts_IPS(__attribute__((unused)) void *arg)
 int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 {
     SCLogNotice("Frame Parser for IDS Mode");
+
     uint32_t freespace = 0;
     int32_t nb_rx = 0;
     int32_t enq = 0, portIndex;
@@ -1161,7 +1167,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_eth_stats stats;
 
-    SCLogNotice(" ports %x, core %u, enble %d, scket %d phy %d", 
+    SCLogNotice("IDS ports %x, core %u, enble %d, scket %d phy %d", 
             DPDKINTEL_GENCFG.Port/* port count */, rte_lcore_id(),
             rte_lcore_is_enabled(rte_lcore_id()),
             rte_lcore_to_socket_id(rte_lcore_id()),
@@ -1175,11 +1181,11 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 
 
     while(1) {
-        if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
             {
                 if (0 == rte_eth_stats_get(portMap [portIndex].inport, &stats)) {
-                    SCLogNotice("port  %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64
+                    SCLogNotice("IDS port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64
                                 "ring full %"PRIu64" enq err %"PRIu64" tx err %"PRIu64
                                 "SC Pkt fail %"PRIu64" SC Process Fail %"PRIu64,
                                 portMap [portIndex].inport, stats.ipackets, 
@@ -1199,10 +1205,11 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
         {
             nb_rx = rte_eth_rx_burst(portMap [portIndex].inport, 0, pkts_burst, MAX_PKT_BURST);
             if (likely(nb_rx > 0)) {
-                SCLogDebug("Port %u Frames: %u", portId[index], nb_rx);
+                SCLogDebug("IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
 
                 if (unlikely(stats_matchPattern.totalRules == 0))
                 {
+                    SCLogNotice("No rules matched for IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
                     ret = 0;
                     while (ret < nb_rx)
                     {
@@ -1222,12 +1229,14 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                 }
 
                 for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
-                    rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
+                    //rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
+                    rte_prefetch0(pkts_burst[j]);
                 }
 
                 for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
                     struct rte_mbuf *m = pkts_burst[j];
-                    rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
+                    //rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
+                    rte_prefetch0(pkts_burst[j + PREFETCH_OFFSET]);
 
                     SCLogDebug("add frame to RB %u len %d for %p",
                                  portMap [portIndex].ringid, m->pkt_len, m);
@@ -1337,6 +1346,7 @@ int32_t launchDpdkFrameParser(void)
 
     uint32_t reqCores = 0x00, availCores = 0x00;
     struct rte_eth_link linkSpeed;
+    struct rte_config *ptr = rte_eal_get_configuration();
 
     SCLogDebug(" Core current %u master %u",
                rte_lcore_id(),rte_get_master_lcore());
@@ -1369,7 +1379,7 @@ int32_t launchDpdkFrameParser(void)
         if (portSpeed1000 & 0x01) /* check if remainder is present */
             reqCores++;
     }
-    availCores = getCpuCOunt(getDpdkIntelCpu());
+    availCores = ptr->lcore_count - 1;
 
     SCLogDebug(" ----------- DPDK INTEL req: %u avail: %u", reqCores, availCores);
     if (availCores < reqCores)
@@ -1389,7 +1399,7 @@ int32_t launchDpdkFrameParser(void)
             portIndexBmp_10_100 =  portIndexBmp_10_100 | (1 << reqCores);
         else if(linkSpeed.link_speed == ETH_SPEED_NUM_10G)
             portIndexBmp_10000 =  portIndexBmp_10000 | (1 << reqCores);
-        else if (linkSpeed.link_speed == ETH_LINK_NUM_1G)
+        else if (linkSpeed.link_speed == ETH_SPEED_NUM_1G)
             portIndexBmp_1000 =  portIndexBmp_1000 | (1 << reqCores);
         else
         {
@@ -1458,7 +1468,7 @@ int32_t launchDpdkFrameParser(void)
     }
     else if (DPDKINTEL_GENCFG.OpMode == IDS) {
        rte_eal_remote_launch(ReceiveDpdkPkts_IDS, NULL, getCpuIndex());
-        SCLogNotice("DPDK Started in IDS Mode!!!");
+       SCLogNotice("DPDK Started in IDS Mode!!!");
     }
     else if (DPDKINTEL_GENCFG.OpMode == BYPASS) {
         rte_eal_remote_launch(ReceiveDpdkPkts_BYPASS, NULL, getCpuIndex());

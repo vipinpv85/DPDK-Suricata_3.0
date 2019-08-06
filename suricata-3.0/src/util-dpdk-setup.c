@@ -399,42 +399,26 @@ uint32_t getCpuCOunt(uint32_t CpuBmp)
 /*  To find the core index from number*/
 uint32_t getCpuIndex(void)
 {
-    uint32_t availCpus = getDpdkIntelCpu();
     static uint32_t cpuIndex = 0;
+    unsigned lcore_id = 0;
 
-    if (cpuIndex)
-        cpuIndex++;
-
-    while (((availCpus >> cpuIndex) & 1) == 0)
-    {
-        cpuIndex++;
+    struct rte_config *ptr = rte_eal_get_configuration();
+    if (ptr == NULL) {
+        SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Cannot fetch rte_eal_get_configuration");
+        return (-1);
     }
-    SCLogDebug("cpuIndex :%u", cpuIndex);
 
-    return cpuIndex;
-}
+    SCLogNotice(" master_lcore %x lcore_count %u", ptr->master_lcore, ptr->lcore_count);
+    RTE_LCORE_FOREACH_SLAVE(lcore_id) {
+        if ((cpuIndex & (1 << lcore_id)) == 0) {
+            cpuIndex |= (1 << lcore_id);
+            SCLogNotice(" cpuIndex %x lcore_id %x", cpuIndex, lcore_id);
+            return lcore_id;
+        }
+    }
 
-uint32_t getDpdkIntelCpu(void)
-{
-    uint32_t dpdkExecCores = 0x00;
-    uint32_t invertCoreSet = 0x00;
-
-    uint32_t coreBmp[32] = {0, 1, 3, 7, 15, 31, 63, 127, 255, 511, 1023, 2047, 4095,
-                            8191, 16383, 32767, 65535};
-
-    SCLogDebug("CPU Details:");
-    SCLogDebug(" - core set: %u", coreSet);
-
-    dpdkExecCores = coreBmp[rte_lcore_count()];
-    SCLogDebug(" - DPDK core: %u", dpdkExecCores);
-
-    invertCoreSet = ~(coreSet);
-    SCLogDebug(" - Inverted CoreSet: %u", invertCoreSet);
-
-    dpdkExecCores = dpdkExecCores & invertCoreSet;
-    SCLogDebug("!!!! !!!! dpdkExecCores %x",dpdkExecCores);
-
-    return dpdkExecCores;
+    SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Cannot get right lcore!");
+    return (-1);
 }
 
 void initLaunchFunc(void)
