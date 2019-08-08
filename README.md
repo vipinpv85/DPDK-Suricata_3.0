@@ -76,9 +76,7 @@ dpdkintel:
 
    inputs:
       - interface: 0
-        copy-interface: <dummy value>
       - interface: 1
-        copy-interface: <dummy value>
 
  # Select dpdk intel operation mode ips|ids|bypass
         opmode: ids
