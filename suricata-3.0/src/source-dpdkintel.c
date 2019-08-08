@@ -35,12 +35,6 @@ extern launchPtr launchFunc[5];
  */
 typedef struct DpdkIntelThreadVars_t_
 {
-    /* To Do: fill with DPDK eth dev details */
-    struct rte_eth_dev_info dev_info;
-
-    /* DPDK Ring Buff to deque the pkt desc */
-    uint8_t ringBuffId;
-
     /* counters */
     uint64_t bytes;
     uint64_t pkts;
@@ -48,14 +42,12 @@ typedef struct DpdkIntelThreadVars_t_
     ThreadVars *tv;
     TmSlot *slot;
 
-    int vlan_disabled;
-
-    /* To Do: is this required?*/
-    /* threads count */
-    int threads; 
 
     char *interface;
     char *outIface;
+
+    /* DPDK Ring Buff to deque the pkt desc */
+    uint8_t ringBuffId;
 
     uint8_t dpdk_port_id;
     uint8_t promiscous;
@@ -64,6 +56,9 @@ typedef struct DpdkIntelThreadVars_t_
     uint8_t outIfaceId;
 
     int copy_mode;
+    int vlan_disabled;
+    /* threads count */
+    int threads; 
 
     LiveDevice *livedev;
     ChecksumValidationMode checksum_mode;
@@ -148,22 +143,18 @@ void DpdkIntelReleasePacket(Packet *p)
     SCLogDebug(" TX packet through port %d for %p", portId, m);
 
     /* Use this thread's context to free the packet. */
-    if (DPDKINTEL_GENCFG.OpMode == IPS || DPDKINTEL_GENCFG.OpMode == BYPASS)
-    {
+    if (DPDKINTEL_GENCFG.OpMode == IDS) {
+        SCLogDebug(" Free frame as its IDS ");
+        rte_pktmbuf_free(m);
+    } else if (DPDKINTEL_GENCFG.OpMode == IPS || DPDKINTEL_GENCFG.OpMode == BYPASS) {
        if (rte_eth_tx_burst(portId, 0, (struct rte_mbuf **)&m, 1) != 1) {
-           //SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " Unable to TX via port %d for %p in OpMode %d", 
-                       //portId, m, DPDKINTEL_GENCFG.OpMode);
+           SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", 
+                       portId, m, DPDKINTEL_GENCFG.OpMode);
            rte_pktmbuf_free(m);
        }
-
-       PacketFreeOrRelease (p);
-       return;
     }
 
-    SCLogDebug(" Free frame as its IDS ");
-    rte_pktmbuf_free(m);
     PacketFreeOrRelease(p);
-
     return;
 }
 
@@ -252,7 +243,6 @@ static inline Packet *DpdkIntelProcessPacket(DpdkIntelThreadVars_t *ptv, struct 
     p->dpdkIntel_ringId = ptv->ringBuffId;
     p->dpdkIntel_inPort = ptv->inIfaceId;
     p->dpdkIntel_outPort = ptv->outIfaceId;
-
     p->ReleasePacket = DpdkIntelReleasePacket;
 
     return p;
@@ -298,8 +288,6 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
     DpdkIntelThreadVars_t *ptv = (DpdkIntelThreadVars_t *)data;
     Packet *p = NULL;
     TmSlot *s = (TmSlot *)slot;
-    //time_t last_dump = 0;
-    //struct timeval current_time;
 
     ptv->slot = s->slot_next;
 
@@ -311,7 +299,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
     }
 
     while(1) {
-        if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             SCReturnInt(TM_ECODE_OK);
         }
 
@@ -335,7 +323,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                 SCLogDebug(" User data %"PRIx64, tmp->udata64);
 
                 p = DpdkIntelProcessPacket(ptv, tmp);
-                if (NULL == p) {
+                if (unlikely(NULL == p)) {
                     SCLogError(SC_ERR_DPDKINTEL_SCAPI, "failed to Process to Suricata");
                     /* update counters */
                     dpdkStats[ptv->inIfaceId].sc_pkt_null++;
@@ -375,7 +363,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                 SCLogDebug(" User data %"PRIx64, tmp->udata64);
 
                 p = DpdkIntelProcessPacket(ptv, tmp);
-                if (NULL == p) {
+                if (unlikely(NULL == p)) {
                     SCLogError(SC_ERR_DPDKINTEL_SCAPI, "failed to Process to Suricata");
                     /* update counters */
                     dpdkStats[ptv->inIfaceId].sc_pkt_null++;
@@ -402,7 +390,6 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                 SCLogDebug("Invoking thread slot process!!");
             }
         } /* dequed frames from ring buffer */
-
     }
 
 #if 0
@@ -576,7 +563,9 @@ TmEcode DecodeDpdk(ThreadVars *tv, Packet *p, void *data, PacketQueue *pq, Packe
     DecodeThreadVars *dtv = (DecodeThreadVars *)data;
     struct rte_mbuf *dptr = (struct rte_mbuf *)p->dpdkIntel_mbufPtr;
 
-    SCLogDebug(" DecodeDpdk mbuff %p len %d plen %d", 
+    /* prefetch the frame */
+    rte_prefetch0(rte_pktmbuf_mtod(dptr, void *));
+    SCLogDebug(" mbuff %p len %d plen %d", 
                  dptr, dptr->pkt_len, GET_PKT_LEN(p));
 
     /* XXX HACK: flow timeout can call us for injected pseudo packets
@@ -596,8 +585,6 @@ TmEcode DecodeDpdk(ThreadVars *tv, Packet *p, void *data, PacketQueue *pq, Packe
                            (GET_PKT_LEN(p) * 8)/1000000.0 );
 #endif
 
-    //StatsAddUI64(dtv->counter_avg_pkt_size, tv->sc_perf_pca, GET_PKT_LEN(p));
-    //StatsSetUI64(dtv->counter_max_pkt_size, tv->sc_perf_pca, GET_PKT_LEN(p));
     StatsAddUI64(tv, dtv->counter_avg_pkt_size, GET_PKT_LEN(p));
     StatsSetUI64(tv, dtv->counter_max_pkt_size, GET_PKT_LEN(p));
 
