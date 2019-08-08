@@ -1174,11 +1174,13 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
     }
 
 
+    portIndex = 0;
     while(1) {
-        for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
-        {
-            if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
-                if (0 == rte_eth_stats_get(portMap [portIndex].inport, &stats)) {
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL) && portIndex == DPDKINTEL_GENCFG.Port)) {
+            for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
+            {
+                rte_eth_dev_stop(portIndex);
+                if (likely(0 == rte_eth_stats_get(portMap [portIndex].inport, &stats))) {
                     SCLogNotice("IDS port %u", portMap [portIndex].inport);
                     SCLogNotice(" - pkts: RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
                             stats.ipackets, stats.opackets, stats.imissed);
@@ -1190,33 +1192,26 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                                 dpdkStats[portMap [portIndex].inport].sc_pkt_null,
                                 dpdkStats[portMap [portIndex].inport].sc_fail);
                 }
-                SCReturnInt(TM_ECODE_OK);
+            }
+
+            SCReturnInt(TM_ECODE_OK);
+        }
+
+        if (unlikely(stats_matchPattern.totalRules == 0)) {
+            SCLogDebug("No rules matched for IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
+            continue;
+        }
+
+        for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
+        {
+            if (unlikely(1 == rte_ring_full(srb [portMap [portIndex].ringid]))) {
+                dpdkStats [portMap [portIndex].inport].ring_full++;
+                continue;
             }
 
             nb_rx = rte_eth_rx_burst(portMap [portIndex].inport, 0, pkts_burst, MAX_PKT_BURST);
             if (likely(nb_rx > 0)) {
                 SCLogDebug("IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
-
-                if (unlikely(stats_matchPattern.totalRules == 0))
-                {
-                    SCLogDebug("No rules matched for IDS Port %u Frames: %u", portMap [portIndex].inport, nb_rx);
-                    ret = 0;
-                    while (ret < nb_rx)
-                    {
-                        rte_pktmbuf_free(pkts_burst[ret]);
-                        ret++;
-                    }
-                    continue;
-                }
-
-                if (unlikely(1 == rte_ring_full(srb [portMap [portIndex].ringid]))) {
-                    dpdkStats [portMap [portIndex].inport].ring_full++;
-                    for (ret = 0; ret < nb_rx; ret++)
-                    {
-                        rte_pktmbuf_free(pkts_burst[ret]);
-                    }
-                    continue;
-                }
 
                 for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
                     rte_prefetch0(pkts_burst[j]);
