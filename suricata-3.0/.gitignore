@@ -1,9 +1,0 @@
-# Donn't track content of these folders
-
-src/.deps/
-
-# Compiled source #
-###################
-
-*.Po
-
