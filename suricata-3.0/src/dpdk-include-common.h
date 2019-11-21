@@ -17,22 +17,6 @@
 #include <signal.h>
 #include <stdbool.h>
 
-//
-//#include <stdio.h>
-//#include <stdint.h>
-//#include <stdlib.h>
-//#include <inttypes.h>
-//#include <sys/types.h>
-//#include <string.h>
-//#include <sys/queue.h>
-//#include <stdarg.h>
-//#include <errno.h>
-//#include <getopt.h>
-//#include <fcntl.h>
-//#include <ctype.h>
-//#include <sys/stat.h>
-//#include <sys/types.h>
-
 #include <rte_config.h>
 #include <rte_common.h>
 #include <rte_byteorder.h>
