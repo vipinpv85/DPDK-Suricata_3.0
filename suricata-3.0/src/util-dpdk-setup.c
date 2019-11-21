@@ -36,31 +36,14 @@ launchPtr launchFunc[5];
 /* STATIC */
 static const struct rte_eth_conf portConf = {
     .rxmode = {
-              .split_hdr_size = 0,
-              .header_split   = 0, /**< Header Split disabled */
-              .hw_ip_checksum = 0, /**< IP checksum offload disabled */
-              .hw_vlan_filter = 0, /**< VLAN filtering disabled */
-              .jumbo_frame    = 0, /**< Jumbo Frame Support disabled */
-              .hw_strip_crc   = 0, /**< CRC stripped by hardware */
-              },
+        .split_hdr_size = 0,
+    },
     .txmode = {
-              .mq_mode = ETH_MQ_TX_NONE,
-              },
+        .mq_mode = ETH_MQ_TX_NONE,
+    },
 };
 
 static struct rte_eth_txconf tx_conf = {
-    .tx_thresh = {
-        .pthresh = 32,
-        .hthresh = 0,
-        .wthresh = 0,
-    },
-    .tx_free_thresh = 32, /* Use PMD default values */
-    .tx_rs_thresh = 32, /* Use PMD default values */
-    .txq_flags = (ETH_TXQ_FLAGS_NOMULTSEGS |
-              ETH_TXQ_FLAGS_NOVLANOFFL |
-              ETH_TXQ_FLAGS_NOXSUMSCTP |
-              ETH_TXQ_FLAGS_NOXSUMUDP |
-              ETH_TXQ_FLAGS_NOXSUMTCP)
 };
 
 static struct rte_eth_rxconf rx_conf = {
@@ -108,9 +91,10 @@ int dpdkPortUnSet(uint8_t portId)
 
 int32_t dpdkIntelDevSetup(void)
 {
-    uint8_t portIndex = 0, portTotal = rte_eth_dev_count();
+    uint8_t portIndex = 0, portTotal = rte_eth_dev_count_avail();
     uint8_t inport = 0;
     int32_t ret = 0;
+    char portName[RTE_ETH_NAME_MAX_LEN] = {0};
 
     struct rte_eth_link link;
     struct rte_eth_dev_info dev_info;
@@ -149,17 +133,10 @@ int32_t dpdkIntelDevSetup(void)
      */
     for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
     {
-        memset(&dev_info, 0x00, sizeof(struct rte_eth_dev_info));
-        memset(&link, 0x00, sizeof(struct rte_eth_link));
-
         inport = portMap [portIndex].inport;
         rte_eth_dev_info_get (inport, &dev_info);
-        if (NULL == dev_info.pci_dev) {
-            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "port %d PCI is NULL!",
-                       inport);
-            return -3;
-        }
-
+        if (rte_eth_dev_get_name_by_port(inport, portName) == 0)
+            SCLogDebug(" - port (%u) Name (%s)", inport, portName);
         fflush(stdout);
 
         /* ToDo - change default configuration to systune configuration */
@@ -317,7 +294,7 @@ void dpdkConfSetup(void)
     }
 
     file_config.isDpdk = 1;
-    file_config.dpdkCpuCount = rte_eth_dev_count();
+    file_config.dpdkCpuCount = rte_eth_dev_count_avail();
     //file_config.dpdkCpuOffset = rte_lcore_count() - DPDKINTEL_GENCFG.Port;
     file_config.dpdkCpuOffset = rte_lcore_count() - dpdkIntelCoreCount;
     file_config.suricataCpuOffset = 0;
