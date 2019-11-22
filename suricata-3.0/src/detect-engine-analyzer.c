@@ -508,7 +508,7 @@ void dpdkRuleAnalysis(Signature *s)
     uint8_t checkProto;
 
     printf(" action %x, proto.flags %x \n",
-           s->action, s->proto.flags);
+           s->action, s->proto.flags );
 
     if (s->alproto) {
         if (s->alproto == ALPROTO_HTTP)
