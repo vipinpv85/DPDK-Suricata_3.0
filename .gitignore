@@ -1,9 +1,9 @@
 # Donn't track content of these folders
 
-src/.deps/*
+suricata-3.0/src/.deps/*
 
 # Compiled source #
 ###################
 
 *.Po
-
+*.log
