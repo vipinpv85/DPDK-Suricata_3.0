@@ -584,7 +584,7 @@ legacy:
 
 # You can specify a threshold config file by setting "threshold-file"
 # to the path of the threshold config file:
-# threshold-file: /etc/suricata/threshold.config
+threshold-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/threshold.config
 
 # The detection engine builds internal groups of signatures. The engine
 # allow us to specify the profile to use for them, to manage memory on an
@@ -1137,7 +1137,7 @@ ipfw:
 
 # Set the default rule path here to search for the files.
 # if not set, it will look at the current working dir
-default-rule-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/rules
+default-rule-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/rules
 rule-files:
  - botcc.rules
  - ciarmy.rules
@@ -1190,8 +1190,8 @@ rule-files:
 # - modbus-events.rules  # available in suricata sources under rules dir
  - app-layer-events.rules  # available in suricata sources under rules dir
 
-classification-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/classification.config
-reference-config-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/reference.config
+classification-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/classification.config
+reference-config-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/reference.config
 
 # Holds variables that would be used by the engine.
 vars:
