@@ -1,6 +1,5 @@
 # Donn't track content of these folders
 
-suricata-3.0/src/*
 suricata-3.0/src/.deps/*
 suricata-3.0/libhtp/htp/.libs/*
 suricata-3.0/libhtp/htp/.deps/*
