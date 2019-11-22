@@ -8,7 +8,7 @@
 #define CLS 64
 
 /* Our CONFIG_DIR */
-#define CONFIG_DIR "/usr/local/etc/suricata/"
+#define CONFIG_DIR "/home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/"
 
 /* Enable debug output */
 /* #undef DEBUG */
@@ -362,8 +362,7 @@
 /* (libpcap version 0.x) */
 #define LIBPCAP_VERSION_MAJOR 1
 
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
+/* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
 
 /* Enable Linux Netfilter NFQUEUE support for inline IDP */

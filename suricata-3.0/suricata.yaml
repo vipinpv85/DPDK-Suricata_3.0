@@ -50,7 +50,7 @@ host-mode: auto
 
 # Default pid file.
 # Will use this file if no --pidfile in command options.
-#pid-file: /usr/local/var/run/suricata.pid
+#pid-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/var/run/suricata.pid
 
 # Daemon working directory
 # Suricata will change directory to this one if provided
@@ -65,7 +65,7 @@ host-mode: auto
 # The default logging directory.  Any log or output file will be
 # placed here if its not specified with a full path name.  This can be
 # overridden with the -l command line parameter.
-default-log-dir: /usr/local/var/log/suricata/
+default-log-dir: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/var/log/suricata/
 
 # Unix command socket can be used to pass commands to suricata.
 # An external tool can then connect to get information from suricata
@@ -440,11 +440,14 @@ dpdkintel:
   inputs:
   - interface: 0
     copy-interface: 1
+    #for ids you can ignore copy-interface
   - interface: 1
     copy-interface: 0
+    #for ids you can ignore copy-interface
 
   # Select dpdk intel operation mode ips|ids|bypass
-  opmode: ids
+  opmode: ips
+  #opmode: ids
 
 # af-packet support
 # Set threads to > 1 to use PACKET_FANOUT support
@@ -993,7 +996,7 @@ logging:
       # type: json
   - file:
       enabled: no
-      filename: /usr/local/var/log/suricata/suricata.log
+      filename: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/var/log/suricata/suricata.log
       # type: json
   - syslog:
       enabled: no
@@ -1134,7 +1137,7 @@ ipfw:
 
 # Set the default rule path here to search for the files.
 # if not set, it will look at the current working dir
-default-rule-path: /usr/local/etc/suricata/rules
+default-rule-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/rules
 rule-files:
  - botcc.rules
  - ciarmy.rules
@@ -1187,8 +1190,8 @@ rule-files:
 # - modbus-events.rules  # available in suricata sources under rules dir
  - app-layer-events.rules  # available in suricata sources under rules dir
 
-classification-file: /usr/local/etc/suricata/classification.config
-reference-config-file: /usr/local/etc/suricata/reference.config
+classification-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/classification.config
+reference-config-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/reference.config
 
 # Holds variables that would be used by the engine.
 vars:
@@ -1250,8 +1253,8 @@ vars:
 #   - alert
 
 # IP Reputation
-#reputation-categories-file: /usr/local/etc/suricata/iprep/categories.txt
-#default-reputation-path: /usr/local/etc/suricata/iprep
+#reputation-categories-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/iprep/categories.txt
+#default-reputation-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/iprep
 #reputation-files:
 # - reputation.list
 

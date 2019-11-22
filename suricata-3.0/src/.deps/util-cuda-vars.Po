@@ -1,3 +1,0 @@
-util-cuda-vars.o: util-cuda-vars.c /usr/include/stdc-predef.h
-
-/usr/include/stdc-predef.h:

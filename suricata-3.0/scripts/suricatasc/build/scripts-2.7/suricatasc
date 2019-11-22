@@ -29,7 +29,7 @@ args = parser.parse_args()
 if args.socket != None:
     SOCKET_PATH = args.socket
 else:
-    SOCKET_PATH = "/usr/local/var/run/suricata/suricata-command.socket"
+    SOCKET_PATH = "/home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/var/run/suricata/suricata-command.socket"
 
 sc = SuricataSC(SOCKET_PATH, verbose=args.verbose)
 try:
