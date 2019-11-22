@@ -10,3 +10,5 @@ suricata-3.0/libhtp/htp/.deps/*
 *.Po
 *.log
 *.o
+suricata-3.0/src/suricata
+suricata-3.0/libhtp/htp/*.lo
