@@ -19,19 +19,23 @@ extern stats_matchPattern_t stats_matchPattern;
 extern uint64_t coreSet;
 
 /* G L O B A L S */
-uint8_t  portSpeed [16];
+uint8_t  portSpeed[16];
 uint8_t  portSpeed10;
 uint8_t  portSpeed100;
 uint8_t  portSpeed1000;
 uint8_t  portSpeed10000;
 uint8_t  portSpeedUnknown;
 uint8_t  dpdkIntelCoreCount = 0;
-struct   rte_ring *srb [16];
-char* argument[EAL_ARGS] = {"suricata","-c","0x1e", "--", "-P", "-p", "15", NULL};
-file_config_t  file_config;
-struct rte_mempool * dp_pktmbuf_pool = NULL;
-DpdkIntelPortMap portMap [16];
+
+DpdkIntelPortMap portMap[16];
 launchPtr launchFunc[5];
+
+file_config_t file_config;
+
+struct rte_mempool *dp_pktmbuf_pool = NULL;
+struct rte_ring    *srb[16];
+
+char* argument[EAL_ARGS] = {"suricata","-c","0x1e", "--log-level=1", "--", "-P", "-p", "15", NULL};
 
 /* STATIC */
 static const struct rte_eth_conf portConf = {
@@ -230,7 +234,7 @@ void dpdkConfSetup(void)
 {
     int32_t ret = 0;
     uint8_t inport = 0, outport = 0, portIndex = 0, portBit = 0;
-    
+
     SCLogNotice("DPDK Version: %s", rte_version());
 
     ret = rte_eal_has_hugepages();
@@ -302,6 +306,40 @@ void dpdkConfSetup(void)
     initLaunchFunc();
 }
 
+void dpdkAclConfSetup(void)
+{
+    struct rte_acl_param acl_param;
+    struct rte_acl_ctx *ctx;
+    
+    SCLogNotice("DPDK ACL setup\n");
+
+    acl_param.socket_id = 0;
+    acl_param.max_rule_num = 10240;
+
+    /* setup acl - IPv4 */
+    acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip4_defs));
+    acl_param.name = "suricata-ipv4";
+    ctx = rte_acl_create(&acl_param);
+    if (ctx == NULL) {
+        SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv4 fail!!!");
+        exit(EXIT_FAILURE);
+    }
+    SCLogNotice("DPDK ipv4Acl: %p done!", ctx);
+    file_config.acl.ipv4Acl = (void *)ctx;
+
+    /* setup acl - IPv6 */
+    acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip6_defs));
+    acl_param.name = "suricata-ipv6";
+    ctx = rte_acl_create(&acl_param);
+    if (ctx == NULL) {
+        SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv4 fail!!!");
+        exit(EXIT_FAILURE);
+    }
+    SCLogNotice("DPDK ipv6Acl: %p done!", ctx);
+    file_config.acl.ipv6Acl = (void *)ctx;
+
+}
+
 int32_t dpdkEalInit()
 {
     int ret = rte_eal_init(EAL_ARGS, (char **)argument);
@@ -335,6 +373,18 @@ void dumpMatchPattern(void)
     SCLogNotice(" * ipv4:  %"PRId64" ",stats_matchPattern.ipv4);
     SCLogNotice(" * ipv6:  %"PRId64" ",stats_matchPattern.ipv6);
     SCLogNotice("-----------------------");
+
+    if (rte_acl_find_existing("suricata-ipv4")) {
+    SCLogNotice("----- ACL IPV4 DUMP ----");
+    rte_acl_dump(file_config.acl.ipv4Acl);
+    SCLogNotice("-----------------------");
+    }
+
+    if (rte_acl_find_existing("suricata-ipv6")) {
+    SCLogNotice("----- ACL IPV6 DUMP ----");
+    rte_acl_dump(file_config.acl.ipv6Acl);
+    SCLogNotice("-----------------------");
+    }
 
     return;
 }

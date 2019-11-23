@@ -2272,6 +2272,8 @@ int main(int argc, char **argv)
     if (dpdkEalInit() < 0) { 
         exit(EXIT_FAILURE);
     }
+
+    dpdkAclConfSetup();
 #endif /* HAVE_DPDKINTEL */
 
     if (ParseCommandLine(argc, argv, &suri) != TM_ECODE_OK) {
@@ -2592,7 +2594,9 @@ int main(int argc, char **argv)
     if (suri.run_mode == RUNMODE_DPDKINTEL) 
     {
        rte_eal_mp_wait_lcore();
-       /* ToDo: cleanup mbuf anf descriptors  */ 
+       /* ToDo: stop ports, cleanup mbuf, descriptors, acl */ 
+       //rte_acl_free(file_config.acl.ipv4Acl);
+       //rte_acl_free(file_config.acl.ipv6Acl);
     }
 #endif /* HAVE_DPDKINTEL */
 

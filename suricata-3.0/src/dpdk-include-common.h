@@ -56,5 +56,166 @@
 
 #include "src/util-error.h"
 #include "src/util-debug.h"
-#endif /*__DPDK_INCLUDE_COMMON__*/
 
+/*
+ * Rule and trace formats definitions.
+ */
+enum {
+    PROTO_FIELD_IPV4,
+    SRC_FIELD_IPV4,
+    DST_FIELD_IPV4,
+    SRCP_FIELD_IPV4,
+    DSTP_FIELD_IPV4,
+    NUM_FIELDS_IPV4
+};
+
+/*
+ * That effectively defines order of IPV4 classifications:
+ *  - PROTO
+ *  - SRC IP ADDRESS
+ *  - DST IP ADDRESS
+ *  - PORTS (SRC and DST)
+ */
+enum {
+    RTE_ACL_IPV4_PROTO,
+    RTE_ACL_IPV4_SRC,
+    RTE_ACL_IPV4_DST,
+    RTE_ACL_IPV4_PORTS,
+    RTE_ACL_IPV4_NUM
+};
+
+static struct rte_acl_field_def ip4_defs[NUM_FIELDS_IPV4] = {
+    {
+    .type = RTE_ACL_FIELD_TYPE_BITMASK,
+    .size = sizeof(uint8_t),
+    .field_index = PROTO_FIELD_IPV4,
+    .input_index = RTE_ACL_IPV4_PROTO,
+    .offset = 0,
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = sizeof(uint32_t),
+    .field_index = SRC_FIELD_IPV4,
+    .input_index = RTE_ACL_IPV4_SRC,
+    .offset = offsetof(struct ip, ip_src) - offsetof(struct ip, ip_p)
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = sizeof(uint32_t),
+    .field_index = DST_FIELD_IPV4,
+    .input_index = RTE_ACL_IPV4_DST,
+    .offset = offsetof(struct ip, ip_dst) - offsetof(struct ip, ip_p)
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_RANGE,
+    .size = sizeof(uint16_t),
+    .field_index = SRCP_FIELD_IPV4,
+    .input_index = RTE_ACL_IPV4_PORTS,
+    .offset = sizeof(struct ip) - offsetof(struct ip, ip_p)
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_RANGE,
+    .size = sizeof(uint16_t),
+    .field_index = DSTP_FIELD_IPV4,
+    .input_index = RTE_ACL_IPV4_PORTS,
+    .offset = sizeof(struct ip) - offsetof(struct ip, ip_p) +
+        sizeof(uint16_t)
+    },
+};
+
+enum {
+    IP6_PROTO,
+    IP6_SRC0,
+    IP6_SRC1,
+    IP6_SRC2,
+    IP6_SRC3,
+    IP6_DST0,
+    IP6_DST1,
+    IP6_DST2,
+    IP6_DST3,
+    IP6_SRCP,
+    IP6_DSTP,
+    IP6_NUM
+};
+#define IP6_ADDR_SIZE 16
+static struct rte_acl_field_def ip6_defs[IP6_NUM] = {
+    {
+    .type = RTE_ACL_FIELD_TYPE_BITMASK,
+    .size = sizeof(uint8_t),
+    .field_index = IP6_PROTO,
+    .input_index = IP6_PROTO,
+    .offset = 0,
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_SRC0,
+    .input_index = IP6_SRC0,
+    .offset = 2
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_SRC1,
+    .input_index = IP6_SRC1,
+    .offset = 6
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_SRC2,
+    .input_index = IP6_SRC2,
+    .offset = 10
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_SRC3,
+    .input_index = IP6_SRC3,
+    .offset = 14
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_DST0,
+    .input_index = IP6_DST0,
+    .offset = 18
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_DST1,
+    .input_index = IP6_DST1,
+    .offset = 22
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_DST2,
+    .input_index = IP6_DST2,
+    .offset = 26
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_MASK,
+    .size = 4,
+    .field_index = IP6_DST3,
+    .input_index = IP6_DST3,
+    .offset = 30
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_RANGE,
+    .size = sizeof(uint16_t),
+    .field_index = IP6_SRCP,
+    .input_index = IP6_SRCP,
+    .offset = 34
+    },
+    {
+    .type = RTE_ACL_FIELD_TYPE_RANGE,
+    .size = sizeof(uint16_t),
+    .field_index = IP6_DSTP,
+    .input_index = IP6_SRCP,
+    .offset = 36
+    }
+};
+
+#endif /*__DPDK_INCLUDE_COMMON__*/

@@ -41,6 +41,7 @@ int dpdkPortSetup(uint8_t portId);
 int dpdkPortUnSet(uint8_t portId);
 int ringBuffSetup(void);
 void dpdkConfSetup(void);
+void dpdkAclConfSetup(void);
 int32_t dpdkEalInit(void);
 uint32_t getDpdkIntelCpu(void);
 uint32_t getCpuIndex(void);

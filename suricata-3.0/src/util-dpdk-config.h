@@ -156,6 +156,24 @@ typedef struct
     uint8_t cpus;
 } device_config_t;
 
+typedef struct
+{
+#if 0
+    uint8_t isDpdk:1;
+    uint8_t rsrvd:7;
+    uint8_t suricataCpuOffset;
+    uint8_t dpdkCpuCount;
+    uint8_t dpdkCpuOffset;
+    uint8_t mgmtCore;
+    uint8_t cpus;
+
+    port_config_t    port_config[S_DPDK_MAX_ETHPORTS];
+    generic_config_t generic_config;
+#endif
+    void *ipv4Acl;
+    void *ipv6Acl;
+} DpdkConfig_t;
+
 
 typedef struct
 {
@@ -170,21 +188,8 @@ typedef struct
     generic_config_t generic_config;
     port_config_t    port_config[S_DPDK_MAX_ETHPORTS];
     device_config_t  device_config;
+    DpdkConfig_t     acl;
 } file_config_t;
-
-typedef struct
-{
-    uint8_t isDpdk:1;
-    uint8_t rsrvd:7;
-    uint8_t suricataCpuOffset;
-    uint8_t dpdkCpuCount;
-    uint8_t dpdkCpuOffset;
-    uint8_t mgmtCore;
-    uint8_t cpus;
-
-    port_config_t    port_config[S_DPDK_MAX_ETHPORTS];
-    generic_config_t generic_config;
-}DpdkConfig_t;
 
 
 typedef enum
