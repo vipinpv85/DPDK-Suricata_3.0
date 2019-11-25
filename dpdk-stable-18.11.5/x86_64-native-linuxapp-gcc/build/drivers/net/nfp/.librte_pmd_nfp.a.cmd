@@ -1,0 +1,1 @@
+cmd_librte_pmd_nfp.a = ar crDs librte_pmd_nfp.a nfp_cppcore.o nfp_cpp_pcie_ops.o nfp_mutex.o nfp_resource.o nfp_crc.o nfp_mip.o nfp_nffw.o nfp_hwinfo.o nfp_rtsym.o nfp_nsp.o nfp_nsp_cmds.o nfp_nsp_eth.o nfp_net.o 

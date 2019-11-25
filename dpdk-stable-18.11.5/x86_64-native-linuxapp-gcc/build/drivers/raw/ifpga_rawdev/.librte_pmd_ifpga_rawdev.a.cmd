@@ -1,0 +1,1 @@
+cmd_librte_pmd_ifpga_rawdev.a = ar crDs librte_pmd_ifpga_rawdev.a ifpga_api.o ifpga_enumerate.o ifpga_feature_dev.o ifpga_fme.o ifpga_fme_iperf.o ifpga_fme_dperf.o ifpga_fme_error.o ifpga_port.o ifpga_port_error.o opae_hw_api.o opae_ifpga_hw_api.o opae_debug.o ifpga_fme_pr.o ifpga_rawdev.o 

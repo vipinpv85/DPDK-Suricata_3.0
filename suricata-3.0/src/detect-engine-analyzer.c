@@ -507,8 +507,35 @@ void dpdkRuleAnalysis(Signature *s)
     stats_matchPattern.totalRules++;
     uint8_t checkProto;
 
+#if 0
     printf(" action %x, proto.flags %x \n",
-           s->action, s->proto.flags );
+           s->action, s->proto.flags  );
+
+    if (s->addr_dst_match4_cnt) {
+        printf(" addr_dst_match4_cnt %u \n",
+               s->addr_dst_match4_cnt);
+        printf(" ipv4:-\n - dst: start %x end %x\n",
+               s->addr_dst_match4->ip, s->addr_dst_match4->ip2);
+    } else if (s->addr_src_match4_cnt) {
+        printf(" addr_src_match4_cnt %u\n",
+               s->addr_src_match4_cnt);
+        printf(" ipv4:-\n - src: start %x end %x\n ",
+               s->addr_src_match4->ip, s->addr_src_match4->ip2);
+    }
+    else if (s->addr_dst_match6_cnt) {
+        printf(" addr_dst_match6_cnt %u \n",
+               s->addr_dst_match6_cnt);
+        printf(" ipv6:-\n - dst: start %x %x %x %x end %x %x %x %x\n",
+               s->addr_dst_match6->ip[0],  s->addr_dst_match6->ip[1],  s->addr_dst_match6->ip[2],  s->addr_dst_match6->ip[3],
+               s->addr_dst_match6->ip2[0], s->addr_dst_match6->ip2[1], s->addr_dst_match6->ip2[2], s->addr_dst_match6->ip2[3]);
+    } else if (s->addr_src_match6_cnt) {
+        printf(" addr_src_match6_cnt %u\n",
+               s->addr_src_match6_cnt);
+        printf(" ipv6:-\n - src: start %x %x %x %x end %x %x %x %x\n ",
+               s->addr_src_match6->ip[0],  s->addr_src_match6->ip[1],  s->addr_src_match6->ip[2],  s->addr_src_match6->ip[3],
+               s->addr_src_match6->ip2[0], s->addr_src_match6->ip2[1], s->addr_src_match6->ip2[2], s->addr_src_match6->ip2[3]);
+    }
+#endif
 
     if (s->alproto) {
         if (s->alproto == ALPROTO_HTTP)

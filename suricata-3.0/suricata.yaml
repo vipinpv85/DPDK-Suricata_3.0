@@ -439,15 +439,15 @@ dpdkintel:
 
   inputs:
   - interface: 0
-    copy-interface: 1
+    copy-interface: 1 
     #for ids you can ignore copy-interface
-  - interface: 1
-    copy-interface: 0
+#  - interface: 1
+#    copy-interface: 0
     #for ids you can ignore copy-interface
 
   # Select dpdk intel operation mode ips|ids|bypass
-  opmode: ips
-  #opmode: ids
+  #opmode: ips
+  opmode: ids
 
 # af-packet support
 # Set threads to > 1 to use PACKET_FANOUT support

@@ -1,0 +1,1 @@
+cmd_librte_pmd_softnic.a = ar crDs librte_pmd_softnic.a rte_eth_softnic.o rte_eth_softnic_mempool.o rte_eth_softnic_swq.o rte_eth_softnic_link.o rte_eth_softnic_tm.o rte_eth_softnic_tap.o rte_eth_softnic_action.o rte_eth_softnic_pipeline.o rte_eth_softnic_thread.o rte_eth_softnic_cli.o rte_eth_softnic_flow.o rte_eth_softnic_meter.o rte_eth_softnic_cryptodev.o parser.o conn.o 
