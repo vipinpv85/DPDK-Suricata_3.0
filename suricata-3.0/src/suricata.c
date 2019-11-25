@@ -2594,7 +2594,10 @@ int main(int argc, char **argv)
     if (suri.run_mode == RUNMODE_DPDKINTEL) 
     {
        rte_eal_mp_wait_lcore();
-       /* ToDo: stop ports, cleanup mbuf, descriptors, acl */ 
+       /* ToDo: stop ports, cleanup mbuf, descriptors, acl */
+       rte_acl_free(file_config.acl.ipv4Acl);       
+       rte_acl_free(file_config.acl.ipv6Acl);       
+ 
        //rte_acl_free(file_config.acl.ipv4Acl);
        //rte_acl_free(file_config.acl.ipv6Acl);
     }
