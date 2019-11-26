@@ -1,2 +1,0 @@
-/home/vipin/DPDK-Suricata_3.0/dpdk-stable-18.11.5/x86_64-native-linuxapp-gcc/build/kernel/linux/igb_uio/igb_uio.ko
-/home/vipin/DPDK-Suricata_3.0/dpdk-stable-18.11.5/x86_64-native-linuxapp-gcc/build/kernel/linux/igb_uio/igb_uio.o
