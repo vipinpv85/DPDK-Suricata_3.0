@@ -13,3 +13,6 @@ suricata-3.0/libhtp/htp/.deps/*
 suricata-3.0/configure
 suricata-3.0/src/suricata
 suricata-3.0/libhtp/htp/*.lo
+change.sh
+dpdk-stable-18.11.5/*
+emerging.rules.tar.gz

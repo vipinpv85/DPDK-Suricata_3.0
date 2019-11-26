@@ -146,7 +146,20 @@ void DpdkIntelReleasePacket(Packet *p)
     if (DPDKINTEL_GENCFG.OpMode == IDS) {
         SCLogDebug(" Free frame as its IDS ");
         rte_pktmbuf_free(m);
-    } else if (DPDKINTEL_GENCFG.OpMode == IPS || DPDKINTEL_GENCFG.OpMode == BYPASS) {
+    } else if (DPDKINTEL_GENCFG.OpMode == IPS) {
+       /* test packet action as drop, if true drop */
+       if (PACKET_TEST_ACTION(p, ACTION_DROP) == 0) {
+           if (rte_eth_tx_burst(portId, 0, (struct rte_mbuf **)&m, 1) != 1) {
+               SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", 
+                           portId, m, DPDKINTEL_GENCFG.OpMode);
+               rte_pktmbuf_free(m);
+           }
+       }
+       else {
+           SCLogDebug(" Pkt Action to DROP in IPS, hence free mbuf ");
+           rte_pktmbuf_free(m);
+       }
+    } else if (DPDKINTEL_GENCFG.OpMode == BYPASS) {
        if (rte_eth_tx_burst(portId, 0, (struct rte_mbuf **)&m, 1) != 1) {
            SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", 
                        portId, m, DPDKINTEL_GENCFG.OpMode);
