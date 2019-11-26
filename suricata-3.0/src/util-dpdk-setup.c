@@ -508,13 +508,11 @@ void dumpMatchPattern(void)
     if (rte_acl_find_existing("suricata-ipv4")) {
         SCLogNotice("----- ACL IPV4 DUMP (%u) ----", file_config.acl.ipv4AclCount);
         rte_acl_dump(file_config.acl.ipv4AclCtx);
-        SCLogNotice("-----------------------");
     }
 
     if (rte_acl_find_existing("suricata-ipv6")) {
         SCLogNotice("----- ACL IPV6 DUMP (%u) ----", file_config.acl.ipv6AclCount);
         rte_acl_dump(file_config.acl.ipv6AclCtx);
-        SCLogNotice("-----------------------");
     }
 
     return;

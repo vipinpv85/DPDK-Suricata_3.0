@@ -546,6 +546,8 @@ TmEcode ReceiveDpdkThreadDeinit(ThreadVars *tv, void *data)
 {
     DpdkIntelThreadVars_t *ptv = (DpdkIntelThreadVars_t *)data;
 
+    SCLogDebug("RX-TX Intf Id in %d out %d\n", ptv->inIfaceId, ptv->outIfaceId);
+
     /* stop the dpdk port in use */
     dpdkPortUnSet(ptv->inIfaceId);
 
@@ -738,6 +740,8 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
+		    /* ACL check for rule match */
+
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [inPort].enq_err++;
@@ -754,6 +758,8 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         struct rte_mbuf *m = pkts_burst[j];
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
+
+		    /* ACL check for rule match */
 
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
@@ -808,6 +814,8 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
+		    /* ACL check for rule match */
+
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [outPort].enq_err++;
@@ -825,6 +833,8 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
 
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
+
+		    /* ACL check for rule match */
 
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
@@ -929,6 +939,8 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
@@ -945,6 +957,8 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 struct rte_mbuf *m = pkts_burst[j];
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
+
+		/* ACL check for rule match */
 
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
@@ -999,6 +1013,8 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [outPort].enq_err++;
@@ -1016,6 +1032,8 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
 
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
+
+		/* ACL check for rule match */
 
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
@@ -1109,6 +1127,8 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              ringId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+
                 enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
@@ -1126,6 +1146,8 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
 
                 SCLogDebug("add frame to RB %u len %d for %p",
                              ringId, m->pkt_len, m);
+
+		/* ACL check for rule match */
 
                 enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
@@ -1225,6 +1247,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                                  portMap [portIndex].ringid, m->pkt_len, m);
 
                     /* ToDo: update the stats under Debug mode */
+		    /* ACL check for rule match */
 
                     enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1, &freespace);
                     if (unlikely(enq != 1)) {
@@ -1245,6 +1268,8 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                                  portMap [portIndex].ringid, m->pkt_len, m);
 
                     /* ToDo: update the stats under Debug mode */
+		    /* ACL check for rule match */
+
 
                     enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1, &freespace);
                     if (unlikely(enq != 1)) {
