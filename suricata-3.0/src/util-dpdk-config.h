@@ -170,8 +170,12 @@ typedef struct
     port_config_t    port_config[S_DPDK_MAX_ETHPORTS];
     generic_config_t generic_config;
 #endif
-    void *ipv4Acl;
-    void *ipv6Acl;
+    void *ipv4AclCtx;
+    void *ipv6AclCtx;
+    void *ipv4AclRules;
+    void *ipv6AclRules;
+    uint16_t ipv4AclCount;
+    uint16_t ipv6AclCount;
 } DpdkConfig_t;
 
 

@@ -35,7 +35,10 @@
 #include "detect-flow.h"
 #include "detect-flags.h"
 #include "util-print.h"
+
+#ifdef HAVE_DPDKINTEL
 #include "util-dpdk-common.h"
+#endif
 
 static int rule_warnings_only = 0;
 static FILE *rule_engine_analysis_FD = NULL;
@@ -506,35 +509,68 @@ void dpdkRuleAnalysis(Signature *s)
 {
     stats_matchPattern.totalRules++;
     uint8_t checkProto;
+    int ret = 0;
+
+    if (s->addr_dst_match4_cnt || s->addr_src_match4_cnt) {
+	uint32_t srcIp = (s->addr_src_match4 == NULL) ? 0x0 : s->addr_src_match4->ip;
+	uint32_t srcIpMask = (s->addr_src_match4 == NULL) ? 0x0 :
+            (~(s->addr_src_match4->ip2 - s->addr_src_match4->ip) & ((uint32_t)-1));
+
+        uint32_t dstIp = (s->addr_dst_match4 == NULL) ? 0x0 : s->addr_dst_match4->ip;
+        uint32_t dstIpMask = (s->addr_dst_match4 == NULL) ? 0x0 :
+            (~(s->addr_dst_match4->ip2 - s->addr_dst_match4->ip) & ((uint32_t)-1));
+
+        ret = addDpdkAcl4Rule(srcIp, srcIpMask, dstIp, dstIpMask);
+        if (ret != 0) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    if (s->addr_dst_match6_cnt || s->addr_src_match6_cnt) {
+	uint32_t srcIp[4] = {0, 0, 0, 0};
+	uint32_t srcIpMask[4] = {0, 0, 0, 0};
+
+        srcIp[0] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[0];
+	srcIp[1] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[1];
+	srcIp[2] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[2];
+	srcIp[3] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[3];
+
+        srcIpMask[0] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[0] - s->addr_src_match6->ip[0]) & ((uint32_t)-1));
+        srcIpMask[1] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[1] - s->addr_src_match6->ip[1]) & ((uint32_t)-1));
+        srcIpMask[2] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[2] - s->addr_src_match6->ip[2]) & ((uint32_t)-1));
+        srcIpMask[3] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[3] - s->addr_src_match6->ip[3]) & ((uint32_t)-1));
+
+	uint32_t dstIp[4] = {0, 0, 0, 0};
+	uint32_t dstIpMask[4] = {0, 0, 0, 0};
+
+        dstIp[0] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[0];
+        dstIp[1] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[1];
+        dstIp[2] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[2];
+        dstIp[3] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[3];
+
+        dstIpMask[0] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[0] - s->addr_dst_match6->ip[0]) & ((uint32_t)-1));
+        dstIpMask[1] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[1] - s->addr_dst_match6->ip[1]) & ((uint32_t)-1));
+        dstIpMask[2] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[2] - s->addr_dst_match6->ip[2]) & ((uint32_t)-1));
+        dstIpMask[3] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[3] - s->addr_dst_match6->ip[3]) & ((uint32_t)-1));
+
+        ret = addDpdkAcl6Rule(srcIp, srcIpMask, dstIp, dstIpMask);
+        if (ret != 0) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
+            exit(EXIT_FAILURE);
+        }
+    }
 
 #if 0
-    printf(" action %x, proto.flags %x \n",
-           s->action, s->proto.flags  );
-
-    if (s->addr_dst_match4_cnt) {
-        printf(" addr_dst_match4_cnt %u \n",
-               s->addr_dst_match4_cnt);
-        printf(" ipv4:-\n - dst: start %x end %x\n",
-               s->addr_dst_match4->ip, s->addr_dst_match4->ip2);
-    } else if (s->addr_src_match4_cnt) {
-        printf(" addr_src_match4_cnt %u\n",
-               s->addr_src_match4_cnt);
-        printf(" ipv4:-\n - src: start %x end %x\n ",
-               s->addr_src_match4->ip, s->addr_src_match4->ip2);
-    }
-    else if (s->addr_dst_match6_cnt) {
-        printf(" addr_dst_match6_cnt %u \n",
-               s->addr_dst_match6_cnt);
-        printf(" ipv6:-\n - dst: start %x %x %x %x end %x %x %x %x\n",
-               s->addr_dst_match6->ip[0],  s->addr_dst_match6->ip[1],  s->addr_dst_match6->ip[2],  s->addr_dst_match6->ip[3],
-               s->addr_dst_match6->ip2[0], s->addr_dst_match6->ip2[1], s->addr_dst_match6->ip2[2], s->addr_dst_match6->ip2[3]);
-    } else if (s->addr_src_match6_cnt) {
-        printf(" addr_src_match6_cnt %u\n",
-               s->addr_src_match6_cnt);
-        printf(" ipv6:-\n - src: start %x %x %x %x end %x %x %x %x\n ",
-               s->addr_src_match6->ip[0],  s->addr_src_match6->ip[1],  s->addr_src_match6->ip[2],  s->addr_src_match6->ip[3],
-               s->addr_src_match6->ip2[0], s->addr_src_match6->ip2[1], s->addr_src_match6->ip2[2], s->addr_src_match6->ip2[3]);
-    }
+    printf(" action %x, proto.flags %x \n", s->action, s->proto.flags);
 #endif
 
     if (s->alproto) {

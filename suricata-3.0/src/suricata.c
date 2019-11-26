@@ -2527,6 +2527,10 @@ int main(int argc, char **argv)
     int engine_retval = EXIT_SUCCESS;
 #ifdef HAVE_DPDKINTEL
     if (suri.run_mode == RUNMODE_DPDKINTEL) {
+	/* build ACL rules */
+        addDpdkAcl4Build();
+        addDpdkAcl6Build();
+
         launchDpdkFrameParser();
     }
 #endif
@@ -2595,9 +2599,9 @@ int main(int argc, char **argv)
     {
        rte_eal_mp_wait_lcore();
        /* ToDo: stop ports, cleanup mbuf, descriptors, acl */
-       rte_acl_free(file_config.acl.ipv4Acl);       
-       rte_acl_free(file_config.acl.ipv6Acl);       
- 
+       rte_acl_free(file_config.acl.ipv4AclCtx);
+       rte_acl_free(file_config.acl.ipv6AclCtx);
+
        //rte_acl_free(file_config.acl.ipv4Acl);
        //rte_acl_free(file_config.acl.ipv6Acl);
     }

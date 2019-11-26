@@ -218,4 +218,7 @@ static struct rte_acl_field_def ip6_defs[IP6_NUM] = {
     }
 };
 
+RTE_ACL_RULE_DEF(acl4_rule, RTE_DIM(ip4_defs));
+RTE_ACL_RULE_DEF(acl6_rule, RTE_DIM(ip6_defs));
+
 #endif /*__DPDK_INCLUDE_COMMON__*/
