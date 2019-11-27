@@ -111,28 +111,28 @@ static struct rte_acl_field_def ip4_defs[NUM_FIELDS_IPV4] = {
     .size = sizeof(uint32_t),
     .field_index = SRC_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_SRC,
-    .offset = 1,
+    .offset = 3,
     },
     {
     .type = RTE_ACL_FIELD_TYPE_MASK,
     .size = sizeof(uint32_t),
     .field_index = DST_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_DST,
-    .offset = 5,
+    .offset = 7,
     },
     {
     .type = RTE_ACL_FIELD_TYPE_RANGE,
     .size = sizeof(uint16_t),
     .field_index = SRCP_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_PORTS,
-    .offset =  9,
+    .offset =  11,
     },
     {
     .type = RTE_ACL_FIELD_TYPE_RANGE,
     .size = sizeof(uint16_t),
     .field_index = DSTP_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_PORTS,
-    .offset =  11,
+    .offset =  13,
     },
 };
 

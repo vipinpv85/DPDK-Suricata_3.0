@@ -450,6 +450,9 @@ typedef struct
 
 typedef struct
 {
+    uint64_t unsupported_pkt;
+    uint64_t ipv4_pkt;
+    uint64_t ipv6_pkt;
      //! Tx Error
     uint64_t tx_err;
      //! Ring Full

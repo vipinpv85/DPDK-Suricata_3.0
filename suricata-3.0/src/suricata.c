@@ -2528,8 +2528,19 @@ int main(int argc, char **argv)
 #ifdef HAVE_DPDKINTEL
     if (suri.run_mode == RUNMODE_DPDKINTEL) {
 	/* build ACL rules */
-        addDpdkAcl4Build();
-        addDpdkAcl6Build();
+        if (file_config.acl.ipv4AclCount) {
+            if (addDpdkAcl4Build() != 0) {
+                SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " Failed to build the IPv4 ACL");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if (file_config.acl.ipv6AclCount) {
+            if (addDpdkAcl6Build() != 0) {
+                SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " Failed to build the IPv6 ACL");
+                exit(EXIT_FAILURE);
+            }
+        }
 
         launchDpdkFrameParser();
     }
