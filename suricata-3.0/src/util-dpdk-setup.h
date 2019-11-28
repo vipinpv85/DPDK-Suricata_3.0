@@ -41,6 +41,7 @@ int dpdkPortSetup(uint8_t portId);
 int dpdkPortUnSet(uint8_t portId);
 int ringBuffSetup(void);
 void dpdkConfSetup(void);
+void *ParseDpdkConf(void);
 void dpdkAclConfSetup(void);
 int32_t addDpdkAcl4Rule(uint32_t srcIp, uint32_t srcIpMask, uint32_t dstIp, uint32_t dstIpMask);
 int32_t addDpdkAcl6Rule(uint32_t srcIp[4], uint32_t srcIpMask[4], uint32_t dstIp[4], uint32_t dstIpMask[4]);

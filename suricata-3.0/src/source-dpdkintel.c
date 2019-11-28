@@ -144,38 +144,32 @@ void TmModuleDecodeDpdkRegister (void) {
 }
 
 static inline void
-FilterPackets(struct rte_mbuf *m, uint32_t *res, const uint8_t **data, uint16_t inPort)
+FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
 {
-    struct ipv4_hdr *ip4_hdr;
-    struct ipv6_hdr *ip6_hdr;
     struct ether_hdr *eth_hdr;
     uint32_t acl_res = 0;
+    int retAcl;
+    const uint8_t *data;
+
+    *res = 0;
 
     eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
-
     if ((eth_hdr->ether_type != 0xDD86) && (eth_hdr->ether_type != 0x0008)) {
-        *res = 0;
         dpdkStats [inPort].unsupported_pkt++; 
         return;
     }
 
-    *res = 1;
-    if (eth_hdr->ether_type == 0x0008) {
-	ip4_hdr = (struct ipv4_hdr *)(rte_pktmbuf_mtod(m, char *) + sizeof(struct ether_hdr));
-        data[0] = MBUF_IPV4_2PROTO(m); /* pointer to key for lookup */
+    if (eth_hdr->ether_type == 0x0008)
         dpdkStats [inPort].ipv4_pkt++;
+    else
+        dpdkStats [inPort].ipv6_pkt++; 
 
-        *res = rte_acl_classify(file_config.acl.ipv4AclCtx, &data, &acl_res, 1, 1); 
-	if (unlikely(*res != 0))
-		return;
-
+    data = (eth_hdr->ether_type == 0x0008) ? MBUF_IPV4_2PROTO(m) : MBUF_IPV6_2PROTO(m); /* pointer to key for lookup */
+    retAcl = rte_acl_classify(
+                 (eth_hdr->ether_type == 0x0008) ? file_config.acl.ipv4AclCtx : file_config.acl.ipv6AclCtx,
+                 &data, &acl_res, 1, 1); 
+    if (likely(retAcl == 0))
         *res = acl_res;
-        return;
-    } 
-
-   ip6_hdr = (struct ipv6_hdr *)(rte_pktmbuf_mtod(m, char *) + sizeof(struct ether_hdr));
-   data[0] = MBUF_IPV6_2PROTO(m);
-   dpdkStats [inPort].ipv6_pkt++; 
 }
 
 void DpdkIntelReleasePacket(Packet *p)
@@ -225,25 +219,62 @@ static inline void DpdkIntelDumpCounters(DpdkIntelThreadVars_t *ptv)
     - update the process thread variables (ptv) with the following information
     - 
     */
-    struct rte_eth_stats stats;
+    struct rte_eth_stats instats, outstats;
+    uint16_t inPort = portMap [ptv->inIfaceId].inport, outPort = portMap [ptv->inIfaceId].outport;
 
     SCLogDebug(" Interface to Dump Stats & Err is %u", ptv->inIfaceId);
 
-    SCLogNotice(" --- thread stats for Intf : %u --- ", ptv->inIfaceId);
-    SCLogNotice(" + ring full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].ring_full,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].enq_err,
-                 dpdkStats [portMap [ptv->inIfaceId].outport].tx_err);
-    SCLogNotice(" + fail: Packet alloc %"PRIu64", Fail %"PRIu64,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].sc_pkt_null,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].sc_fail);
+    SCLogNotice(" --- thread stats for Intf: %u to %u --- ", inPort, outPort);
+    SCLogNotice(" +++ ACL pkts +++");
+    SCLogNotice(" -- unexpected %"PRIu64,
+                dpdkStats[inPort].unsupported_pkt);
+    SCLogNotice(" -- ipv4 %"PRIu64, 
+                dpdkStats[inPort].ipv4_pkt);
+    SCLogNotice(" --- ipv6 %"PRIu64,
+                dpdkStats[inPort].ipv6_pkt);
 
-   /* fetch errr stats of DPDK info */
-    rte_eth_stats_get(ptv->inIfaceId, &stats);
-    SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
-                 stats.ierrors, stats.oerrors, stats.rx_nombuf);
-    SCLogNotice(" + Queue Dropped pkts: %"PRIu64, stats.q_errors[0]);
-    //SCLogNotice(" + Bad CRC: %"PRIu64" LEN: %"PRIu64, stats.ibadcrc, stats.ibadlen);
+    SCLogNotice(" +++ ring +++");
+    SCLogNotice(" -- full %"PRIu64,
+                dpdkStats[inPort].ring_full);
+    SCLogNotice(" -- enq err %"PRIu64,
+                dpdkStats[inPort].enq_err);
+    SCLogNotice(" --  tx err %"PRIu64,
+                dpdkStats[outPort].tx_err);
+
+    if (0 == rte_eth_stats_get(inPort, &instats)){
+        SCLogNotice(" + in-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64, 
+            inPort, instats.ipackets, instats.opackets, instats.imissed);
+        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
+            instats.ierrors, instats.oerrors, instats.rx_nombuf);
+        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, instats.q_errors[0]);
+    }
+
+
+#if 0
+    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
+                dpdkStats[inPort].sc_pkt_null,
+                dpdkStats[inPort].sc_fail);
+    SCLogNotice(" --- DPDK stats for port %u ---", outPort);
+    SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
+                dpdkStats[outPort].unsupported_pkt,
+                dpdkStats[outPort].ipv4_pkt,
+                dpdkStats[outPort].ipv6_pkt);
+    SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
+                dpdkStats[outPort].ring_full,
+                dpdkStats[outPort].enq_err,
+                dpdkStats[inPort].tx_err);
+    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
+                dpdkStats[outPort].sc_pkt_null,
+                dpdkStats[outPort].sc_fail);
+       
+    if (0 == rte_eth_stats_get(outPort, &outstats)) {
+        SCLogNotice(" - out-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
+            outPort, outstats.ipackets, outstats.opackets, outstats.imissed);
+        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
+            outstats.ierrors, outstats.oerrors, outstats.rx_nombuf);
+        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, outstats.q_errors[0]);
+    }
+#endif
 
 #ifdef PACKET_STATISTICS
 #endif
@@ -355,7 +386,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 
     while(1) {
         if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
-            DpdkIntelDumpCounters(ptv);
+            //DpdkIntelDumpCounters(ptv);
             SCReturnInt(TM_ECODE_OK);
         }
 
@@ -572,10 +603,9 @@ TmEcode ReceiveDpdkThreadInit(ThreadVars *tv, void *initdata, void **data)
  */
 void ReceiveDpdkThreadExitStats(ThreadVars *tv, void *data) {
     DpdkIntelThreadVars_t *ditv = (DpdkIntelThreadVars_t *)data;
-
-    DpdkIntelDumpCounters(ditv);
     SCLogInfo("(%s) Packets %" PRIu64 ", bytes %" PRIu64 "", tv->name, ditv->pkts, ditv->bytes);
 
+    DpdkIntelDumpCounters(ditv);
     return;
 }
 
@@ -703,7 +733,6 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_eth_stats stats;
     uint32_t acl_res = 0;
-    uint8_t *acl_key = NULL;
 
     uint32_t portBmpMap = *(uint32_t *) arg;
 
@@ -798,7 +827,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                                      RingId, m->pkt_len, m);
 
 		        /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, inPort);
+                        FilterPackets(m, &acl_res, inPort);
                         if (acl_res == 0) {
                             if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                                 rte_pktmbuf_free(m);
@@ -824,7 +853,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                                      RingId, m->pkt_len, m);
 
 		        /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, inPort);
+                        FilterPackets(m, &acl_res, inPort);
                         if (acl_res == 0) {
                             if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                                 rte_pktmbuf_free(m);
@@ -885,7 +914,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                                      RingId, m->pkt_len, m);
 
                         /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, outPort);
+                        FilterPackets(m, &acl_res, outPort);
                         if (acl_res == 0) {
                             if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                                 rte_pktmbuf_free(m);
@@ -912,7 +941,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                                      RingId, m->pkt_len, m);
 
                         /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, outPort);
+                        FilterPackets(m, &acl_res, outPort);
                         if (acl_res == 0) {
                             if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                                 rte_pktmbuf_free(m);
@@ -950,9 +979,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
     int32_t nb_rx = 0;
     int32_t enq = 0, ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-    struct rte_eth_stats instats, outstats;
     uint32_t acl_res = 0;
-    uint8_t *acl_key = NULL;
 
     uint16_t inPort    = ((*(uint16_t *) arg) & 0x00FF) >> 0;
     uint16_t outPort   = ((*(uint16_t *) arg) & 0xFF00) >> 8;
@@ -969,39 +996,6 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
     while(1)
     {
         if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
-            if (0 == rte_eth_stats_get(inPort, &instats) &&
-                (0 == rte_eth_stats_get(outPort, &outstats)))
-                SCLogNotice(
-                            "\n - in-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64 \
-                            "\n - out-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-                            inPort, instats.ipackets, instats.opackets, instats.imissed,
-                            outPort, outstats.ipackets, outstats.opackets, outstats.imissed);
-
-                SCLogNotice(" --- DPDK stats for port %u ---", inPort);
-                SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                            dpdkStats[inPort].unsupported_pkt,
-                            dpdkStats[inPort].ipv4_pkt,
-                            dpdkStats[inPort].ipv6_pkt);
-                SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                            dpdkStats[inPort].ring_full,
-                            dpdkStats[inPort].enq_err,
-                            dpdkStats[outPort].tx_err);
-                SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                            dpdkStats[inPort].sc_pkt_null,
-                            dpdkStats[inPort].sc_fail);
-                SCLogNotice(" --- DPDK stats for port %u ---", outPort);
-                SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                            dpdkStats[outPort].unsupported_pkt,
-                            dpdkStats[outPort].ipv4_pkt,
-                            dpdkStats[outPort].ipv6_pkt);
-                SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                            dpdkStats[outPort].ring_full,
-                            dpdkStats[outPort].enq_err,
-                            dpdkStats[inPort].tx_err);
-                SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                            dpdkStats[outPort].sc_pkt_null,
-                            dpdkStats[outPort].sc_fail);
-
             break;
         } /* end of suricata_ctl_flags */
 
@@ -1043,7 +1037,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                              RingId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, inPort);
+                FilterPackets(m, &acl_res, inPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
                         rte_pktmbuf_free(m);
@@ -1069,7 +1063,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                              RingId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, inPort);
+                FilterPackets(m, &acl_res, inPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
                         rte_pktmbuf_free(m);
@@ -1130,7 +1124,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                              RingId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-		FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, outPort);
+		FilterPackets(m, &acl_res, outPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
                         rte_pktmbuf_free(m);
@@ -1157,7 +1151,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                              RingId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, outPort);
+                FilterPackets(m, &acl_res, outPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
                         rte_pktmbuf_free(m);
@@ -1191,9 +1185,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
     int32_t enq = 0;
     int32_t ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-    struct rte_eth_stats instats, outstats;
     uint32_t acl_res = 0;
-    uint8_t *acl_key = NULL;
 
     uint16_t inPort  = ((*(uint16_t *) arg) & 0x00FF) >> 0;
     uint16_t outPort = ((*(uint16_t *) arg) & 0xFF00) >> 8;
@@ -1209,39 +1201,6 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
     while(1)
     {
         if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
-            if ((0 == rte_eth_stats_get(inPort, &instats)) &&
-                (0 == rte_eth_stats_get(outPort, &outstats))) {
-                SCLogNotice("\n - in-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64"\n - out-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-                            inPort, instats.ipackets, instats.opackets, instats.imissed,
-                            outPort, outstats.ipackets, outstats.opackets, outstats.imissed);
-            }
-
-            SCLogNotice(" --- DPDK stats for port %u --- ", inPort);
-            SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                        dpdkStats[inPort].unsupported_pkt,
-                        dpdkStats[inPort].ipv4_pkt,
-                        dpdkStats[inPort].ipv6_pkt);
-            SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                        dpdkStats[inPort].ring_full,
-                        dpdkStats[inPort].enq_err,
-                        dpdkStats[outPort].tx_err);
-            SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                        dpdkStats[inPort].sc_pkt_null,
-                        dpdkStats[inPort].sc_fail);
-
-            SCLogNotice(" --- DPDK stats for port %u --- ", outPort);
-            SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                        dpdkStats[outPort].unsupported_pkt,
-                        dpdkStats[outPort].ipv4_pkt,
-                        dpdkStats[outPort].ipv6_pkt);
-            SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                        dpdkStats[outPort].ring_full,
-                        dpdkStats[outPort].enq_err,
-                        dpdkStats[inPort].tx_err);
-            SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                        dpdkStats[outPort].sc_pkt_null,
-                        dpdkStats[outPort].sc_fail);
-
             break;
         } /* end of suricata_ctl_flags */
 
@@ -1285,7 +1244,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                              ringId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, inPort);
+                FilterPackets(m, &acl_res, inPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                        rte_pktmbuf_free(m);
@@ -1312,7 +1271,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                              ringId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, inPort);
+                FilterPackets(m, &acl_res, inPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                        rte_pktmbuf_free(m);
@@ -1373,7 +1332,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                              ringId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, outPort);
+                FilterPackets(m, &acl_res, outPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                        rte_pktmbuf_free(m);
@@ -1400,7 +1359,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                              ringId, m->pkt_len, m);
 
 		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, outPort);
+                FilterPackets(m, &acl_res, outPort);
                 if (acl_res == 0) {
                     if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                        rte_pktmbuf_free(m);
@@ -1443,7 +1402,6 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_eth_stats stats;
     uint32_t acl_res = 0;
-    uint8_t *acl_key = NULL;
 
     SCLogNotice("IDS ports %x, core %u, enble %d, scket %d phy %d", 
             DPDKINTEL_GENCFG.Port/* port count */, rte_lcore_id(),
@@ -1512,9 +1470,8 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                     SCLogDebug("add frame to RB %u len %d for %p",
                                  portMap [portIndex].ringid, m->pkt_len, m);
 
-                    /* ToDo: update the stats under Debug mode */
 		    /* ACL check for rule match */
-                    FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, portMap [portIndex].inport);
+                    FilterPackets(m, &acl_res, portMap [portIndex].inport);
                     if (unlikely(acl_res == 0)) {
                         rte_pktmbuf_free(m);
                         continue;
@@ -1538,9 +1495,8 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                     SCLogDebug("add frame to RB %u len %d for %p",
                                  portMap [portIndex].ringid, m->pkt_len, m);
 
-                    /* ToDo: update the stats under Debug mode */
 		    /* ACL check for rule match */
-                    FilterPackets(m, &acl_res, (const uint8_t *)&acl_key, portMap [portIndex].inport);
+                    FilterPackets(m, &acl_res, portMap [portIndex].inport);
                     if (unlikely(acl_res == 0)) {
                         rte_pktmbuf_free(m);
                         continue;

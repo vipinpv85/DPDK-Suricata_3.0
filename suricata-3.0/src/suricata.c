@@ -2268,8 +2268,14 @@ int main(int argc, char **argv)
     ConfInit();
 
 #ifdef HAVE_DPDKINTEL
+    if (ParseDpdkConf() == NULL) {
+        SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " failed to fetch configuration for dpdk");
+        exit(EXIT_FAILURE);
+    }
+
 /* ToDo: need to rte_init function properly here only */
-    if (dpdkEalInit() < 0) { 
+    if (dpdkEalInit() < 0) {
+        SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " failed to initialize dpdk rte_eal_init");
         exit(EXIT_FAILURE);
     }
 

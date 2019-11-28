@@ -49,6 +49,7 @@
 #include <rte_acl.h>
 #include <rte_version.h>
 #include <rte_tailq.h>
+#include <rte_cfgfile.h>
 
 //#include "util-dpdk-config.h"
 #include "util-dpdk-common.h"
