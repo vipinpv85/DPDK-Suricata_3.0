@@ -11,7 +11,7 @@
 /* D E F I N E S*/
 #define SC_DPDK_MAJOR    1
 #define SC_DPDK_MINOR    8
-#define EAL_ARGS         12
+#define EAL_ARGS         32
 
 
 /* E X T E R N */
@@ -19,48 +19,39 @@ extern stats_matchPattern_t stats_matchPattern;
 extern uint64_t coreSet;
 
 /* G L O B A L S */
-uint8_t  portSpeed [16];
+uint8_t  portSpeed[16];
 uint8_t  portSpeed10;
 uint8_t  portSpeed100;
 uint8_t  portSpeed1000;
 uint8_t  portSpeed10000;
 uint8_t  portSpeedUnknown;
 uint8_t  dpdkIntelCoreCount = 0;
-struct   rte_ring *srb [16];
-char* argument[EAL_ARGS] = {"suricata","-c","0x1e", "--", "-P", "-p", "15", NULL};
-file_config_t  file_config;
-struct rte_mempool * dp_pktmbuf_pool = NULL;
-DpdkIntelPortMap portMap [16];
+
+DpdkIntelPortMap portMap[16];
 launchPtr launchFunc[5];
+
+file_config_t file_config;
+
+struct rte_mempool *dp_pktmbuf_pool = NULL;
+struct rte_ring    *srb[16];
+
+struct acl4_rule testv4;
+struct acl6_rule testv6;
+
+uint16_t argument_count = 1;
+char argument[EAL_ARGS][EAL_ARGS] = {{"suricata"}, {""}};
 
 /* STATIC */
 static const struct rte_eth_conf portConf = {
     .rxmode = {
-              .split_hdr_size = 0,
-              .header_split   = 0, /**< Header Split disabled */
-              .hw_ip_checksum = 0, /**< IP checksum offload disabled */
-              .hw_vlan_filter = 0, /**< VLAN filtering disabled */
-              .jumbo_frame    = 0, /**< Jumbo Frame Support disabled */
-              .hw_strip_crc   = 0, /**< CRC stripped by hardware */
-              },
+        .split_hdr_size = 0,
+    },
     .txmode = {
-              .mq_mode = ETH_MQ_TX_NONE,
-              },
+        .mq_mode = ETH_MQ_TX_NONE,
+    },
 };
 
 static struct rte_eth_txconf tx_conf = {
-    .tx_thresh = {
-        .pthresh = 32,
-        .hthresh = 0,
-        .wthresh = 0,
-    },
-    .tx_free_thresh = 32, /* Use PMD default values */
-    .tx_rs_thresh = 32, /* Use PMD default values */
-    .txq_flags = (ETH_TXQ_FLAGS_NOMULTSEGS |
-              ETH_TXQ_FLAGS_NOVLANOFFL |
-              ETH_TXQ_FLAGS_NOXSUMSCTP |
-              ETH_TXQ_FLAGS_NOXSUMUDP |
-              ETH_TXQ_FLAGS_NOXSUMTCP)
 };
 
 static struct rte_eth_rxconf rx_conf = {
@@ -108,9 +99,10 @@ int dpdkPortUnSet(uint8_t portId)
 
 int32_t dpdkIntelDevSetup(void)
 {
-    uint8_t portIndex = 0, portTotal = rte_eth_dev_count();
+    uint8_t portIndex = 0, portTotal = rte_eth_dev_count_avail();
     uint8_t inport = 0;
     int32_t ret = 0;
+    char portName[RTE_ETH_NAME_MAX_LEN] = {0};
 
     struct rte_eth_link link;
     struct rte_eth_dev_info dev_info;
@@ -149,17 +141,10 @@ int32_t dpdkIntelDevSetup(void)
      */
     for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
     {
-        memset(&dev_info, 0x00, sizeof(struct rte_eth_dev_info));
-        memset(&link, 0x00, sizeof(struct rte_eth_link));
-
         inport = portMap [portIndex].inport;
         rte_eth_dev_info_get (inport, &dev_info);
-        if (NULL == dev_info.pci_dev) {
-            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "port %d PCI is NULL!",
-                       inport);
-            return -3;
-        }
-
+        if (rte_eth_dev_get_name_by_port(inport, portName) == 0)
+            SCLogDebug(" - port (%u) Name (%s)", inport, portName);
         fflush(stdout);
 
         /* ToDo - change default configuration to systune configuration */
@@ -253,7 +238,7 @@ void dpdkConfSetup(void)
 {
     int32_t ret = 0;
     uint8_t inport = 0, outport = 0, portIndex = 0, portBit = 0;
-    
+
     SCLogNotice("DPDK Version: %s", rte_version());
 
     ret = rte_eal_has_hugepages();
@@ -317,7 +302,7 @@ void dpdkConfSetup(void)
     }
 
     file_config.isDpdk = 1;
-    file_config.dpdkCpuCount = rte_eth_dev_count();
+    file_config.dpdkCpuCount = rte_eth_dev_count_avail();
     //file_config.dpdkCpuOffset = rte_lcore_count() - DPDKINTEL_GENCFG.Port;
     file_config.dpdkCpuOffset = rte_lcore_count() - dpdkIntelCoreCount;
     file_config.suricataCpuOffset = 0;
@@ -325,9 +310,271 @@ void dpdkConfSetup(void)
     initLaunchFunc();
 }
 
+void *ParseDpdkConf(void)
+{
+	SCEnter();
+	struct rte_cfgfile *file = NULL;
+
+	file = rte_cfgfile_load("dpdk-suricata.ini", 0);
+
+	/* get section name EAL */
+	if (rte_cfgfile_has_section(file, "EAL")) {
+		SCLogDebug(" section (EAL); count %d", rte_cfgfile_num_sections(file, "EAL", sizeof("EAL") - 1));
+		SCLogNotice(" section (EAL) has entries %d", rte_cfgfile_section_num_entries(file, "EAL"));
+
+		int n_entries = rte_cfgfile_section_num_entries(file, "EAL");
+		struct rte_cfgfile_entry entries[n_entries];
+
+		if (rte_cfgfile_section_entries(file, "EAL", entries, n_entries) != -1) {
+
+			for (int i = 0; i < n_entries; i++) {
+				SCLogDebug(" - name: (%s) value: (%s)", entries[i].name, entries[i].value);
+				snprintf(argument[i * 2 + 1], 32, "%s", entries[i].name);
+				snprintf(argument[i * 2 + 2], 32, "%s", entries[i].value);
+				SCLogDebug(" - argument: (%s) (%s)", argument[i * 2 + 1], argument[i * 2 + 2]);
+			        argument_count += (((entries[i].name) ? 1 : 0) + ((entries[i].value) ? 1 : 0));
+			}
+		}
+	}
+
+#if 0
+	/* get section name PORT-X */
+	for (int i = 0; i < RTE_MAX_ETHPORTS; i++) {
+		char port_section_name[15] = {""};
+
+		sprintf(port_section_name, "%s%d", "PORT-", i);
+		if (rte_cfgfile_has_section(file, port_section_name)) {
+			int n_port_entries = rte_cfgfile_section_num_entries(file, port_section_name);
+
+			SCLogDebug(" %s", port_section_name);
+			SCLogDebug(" section (PORT) has %d entries", n_port_entries);
+
+			struct rte_cfgfile_entry entries[n_port_entries];
+			if (rte_cfgfile_section_entries(file, port_section_name, entries, n_port_entries) != -1) {
+
+				for (int j = 0; j < n_port_entries; j++) {
+					SCLogDebug(" %s name: (%s) value: (%s)", port_section_name, entries[j].name, entries[j].value);
+
+					if (strcasecmp("rx-queues", entries[j].name) == 0)
+						dpdk_ports[i].rxq_count = atoi(entries[j].value);
+					else if (strcasecmp("tx-queues", entries[j].name) == 0)
+						dpdk_ports[i].txq_count = atoi(entries[j].value);
+					else if (strcasecmp("mtu", entries[j].name) == 0)
+						dpdk_ports[i].mtu = atoi(entries[j].value);
+					else if (strcasecmp("rss-tuple", entries[j].name) == 0)
+						dpdk_ports[i].rss_tuple = atoi(entries[j].value);
+					else if (strcasecmp("jumbo", entries[j].name) == 0)
+						dpdk_ports[i].jumbo = (strcasecmp(entries[j].value, "yes") == 0) ? 1 : 0;
+					else if (strcasecmp("core", entries[j].name) == 0)
+						dpdk_ports[i].lcore_index = atoi(entries[j].value);
+				}
+			}
+		}
+	}
+
+	/* get section name MEMPOOL-PORT */
+	if (rte_cfgfile_has_section(file, "MEMPOOL-PORT")) {
+		SCLogDebug(" section (MEMPOOL-PORT); count %d", rte_cfgfile_num_sections(file, "MEMPOOL-PORT", sizeof("MEMPOOL-PORT") - 1));
+		SCLogDebug(" section (MEMPOOL-PORT) has entries %d", rte_cfgfile_section_num_entries(file, "MEMPOOL-PORT"));
+
+		int n_entries = rte_cfgfile_section_num_entries(file, "MEMPOOL-PORT");
+		struct rte_cfgfile_entry entries[n_entries];
+
+		if (rte_cfgfile_section_entries(file, "MEMPOOL-PORT", entries, n_entries) != -1) {
+			for (int j = 0; j < n_entries; j++) {
+				SCLogDebug(" - entries[i] name: (%s) value: (%s)", entries[j].name, entries[j].value);
+
+				if (strcasecmp("name", entries[j].name) == 0)
+					rte_memcpy(dpdk_mempool_config.name, entries[j].value, sizeof(entries[j].value));
+				if (strcasecmp("n", entries[j].name) == 0)
+					dpdk_mempool_config.n = atoi(entries[j].value);
+				if (strcasecmp("elt_size", entries[j].name) == 0)
+					dpdk_mempool_config.elt_size = atoi(entries[j].value);
+				if (strcasecmp("private_data_size", entries[j].name) == 0)
+					dpdk_mempool_config.private_data_size = atoi(entries[j].value);
+				if (strcasecmp("socket_id", entries[j].name) == 0)
+					dpdk_mempool_config.private_data_size = atoi(entries[j].value);
+			}
+		}
+	}
+#endif
+
+	rte_cfgfile_close(file);
+
+	SCReturnPtr(file, "void *");
+}
+
+
+void dpdkAclConfSetup(void)
+{
+    struct rte_acl_param acl_param;
+    struct rte_acl_ctx *ctx;
+    
+    SCLogNotice("DPDK ACL setup\n");
+
+    acl_param.socket_id = 0;
+    acl_param.max_rule_num = 10240 * 2;
+
+    /* setup acl - IPv4 */
+    acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip4_defs));
+    acl_param.name = "suricata-ipv4";
+    ctx = rte_acl_create(&acl_param);
+    if (ctx == NULL) {
+        SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv4 fail!!!");
+        exit(EXIT_FAILURE);
+    }
+    SCLogNotice("DPDK ipv4AclCtx: %p done!", ctx);
+    file_config.acl.ipv4AclCtx = (void *)ctx;
+
+    /* setup acl - IPv6 */
+    acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip6_defs));
+    acl_param.name = "suricata-ipv6";
+    ctx = rte_acl_create(&acl_param);
+    if (ctx == NULL) {
+        SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv4 fail!!!");
+        exit(EXIT_FAILURE);
+    }
+    SCLogNotice("DPDK ipv6AclCtx: %p done!", ctx);
+    file_config.acl.ipv6AclCtx = (void *)ctx;
+
+}
+
+int32_t addDpdkAcl4Rule(uint32_t srcIp, uint32_t srcIpMask, uint32_t dstIp, uint32_t dstIpMask)
+{
+    int ret = 0;
+
+    struct rte_acl_rule *rules = (struct rte_acl_rule *) &testv4;
+    memset(&testv4, 0, sizeof(testv4));
+
+    testv4.data.category_mask = -1;
+    testv4.data.priority = 0xff;
+    testv4.data.userdata = 0xdead;
+
+    if (dstIpMask) {
+        testv4.field[DST_FIELD_IPV4].value.u32 = dstIp;
+        testv4.field[DST_FIELD_IPV4].mask_range.u32 = dstIpMask;
+    }
+    if (srcIpMask) {
+        testv4.field[SRC_FIELD_IPV4].value.u32 = srcIp;
+        testv4.field[SRC_FIELD_IPV4].mask_range.u32 = srcIpMask;
+    }
+
+    //rte_acl_dump(file_config.acl.ipv4AclCtx);
+    ret = rte_acl_add_rules(file_config.acl.ipv4AclCtx, (const struct rte_acl_rule *) rules, 1);
+    if (ret != 0) {
+       rte_acl_dump(file_config.acl.ipv4AclCtx);
+       SCLogNotice("ACL ipv4 add failed %d, but added %u", ret, file_config.acl.ipv4AclCount);
+    } else
+        file_config.acl.ipv4AclCount += 1;
+
+    return ret;
+}
+
+int32_t addDpdkAcl6Rule(uint32_t srcIp[4], uint32_t srcIpMask[4], uint32_t dstIp[4], uint32_t dstIpMask[4])
+{
+    int ret = 0;
+
+    struct rte_acl_rule *rules = (struct rte_acl_rule *) &testv6;
+    memset(&testv6, 0, sizeof(testv6));
+
+    testv6.data.category_mask = -1;
+    testv6.data.priority = 0xff;
+    testv6.data.userdata = 0xdead;
+
+    if (dstIpMask[0]) {
+        testv4.field[IP6_DST0].value.u32 = dstIp[0];
+        testv4.field[IP6_DST0].mask_range.u32 = dstIpMask[0];
+    }
+    if (dstIpMask[1]) {
+        testv4.field[IP6_DST1].value.u32 = dstIp[1];
+        testv4.field[IP6_DST1].mask_range.u32 = dstIpMask[1];
+    }
+    if (dstIpMask[2]) {
+        testv4.field[IP6_DST2].value.u32 = dstIp[2];
+        testv4.field[IP6_DST2].mask_range.u32 = dstIpMask[2];
+    }
+    if (dstIpMask[3]) {
+        testv4.field[IP6_DST3].value.u32 = dstIp[3];
+        testv4.field[IP6_DST3].mask_range.u32 = dstIpMask[3];
+    }
+
+    if (srcIpMask[0]) {
+        testv4.field[IP6_SRC0].value.u32 = srcIp[0];
+        testv4.field[IP6_SRC0].mask_range.u32 = srcIpMask[0];
+    }
+
+    if (srcIpMask[1]) {
+        testv4.field[IP6_SRC1].value.u32 = srcIp[1];
+        testv4.field[IP6_SRC1].mask_range.u32 = srcIpMask[1];
+    }
+
+    if (srcIpMask[2]) {
+        testv4.field[IP6_SRC2].value.u32 = srcIp[2];
+        testv4.field[IP6_SRC2].mask_range.u32 = srcIpMask[2];
+    }
+
+    if (srcIpMask[3]) {
+        testv4.field[IP6_SRC3].value.u32 = srcIp[3];
+        testv4.field[IP6_SRC3].mask_range.u32 = srcIpMask[3];
+    }
+
+    //rte_acl_dump(file_config.acl.ipv4AclCtx);
+    ret = rte_acl_add_rules(file_config.acl.ipv6AclCtx, (const struct rte_acl_rule *) rules, 1);
+    if (ret != 0) {
+       rte_acl_dump(file_config.acl.ipv6AclCtx);
+       SCLogNotice("ACL ipv6 add failed %d, but added %u", ret, file_config.acl.ipv6AclCount);
+    } else
+        file_config.acl.ipv6AclCount += 1;
+
+    return 0;
+}
+
+int32_t addDpdkAcl4Build(void)
+{
+    int ret = 0;
+    struct rte_acl_config acl_build_param = {0};
+
+    acl_build_param.num_categories = 1;
+    acl_build_param.num_fields = RTE_DIM(ip4_defs);
+    memcpy(&acl_build_param.defs, ip4_defs, sizeof(ip4_defs));
+
+    ret = rte_acl_build(file_config.acl.ipv4AclCtx, &acl_build_param);
+    if (ret) {
+        rte_acl_dump(file_config.acl.ipv4AclCtx);
+        SCLogNotice("ACL ipv4 build failed %d", ret);
+    }
+
+    return ret;
+}
+
+int32_t addDpdkAcl6Build(void)
+{
+    int ret = 0;
+    struct rte_acl_config acl_build_param = {0};
+
+    acl_build_param.num_categories = 1;
+    acl_build_param.num_fields = RTE_DIM(ip6_defs);
+    memcpy(&acl_build_param.defs, ip6_defs, sizeof(ip6_defs));
+
+    ret = rte_acl_build(file_config.acl.ipv6AclCtx, &acl_build_param);
+    if (ret) {
+        rte_acl_dump(file_config.acl.ipv4AclCtx);
+        SCLogNotice("ACL ipv6 build failed %d", ret);
+    }
+
+    return ret;
+}
+
+
+
 int32_t dpdkEalInit()
 {
-    int ret = rte_eal_init(EAL_ARGS, (char **)argument);
+    char *args[EAL_ARGS];
+
+    for (int j = 0; j < argument_count; j++)
+        args[j] = argument[j];
+
+    int ret = rte_eal_init(argument_count, (char **)args);
     if (ret < 0)
     {
         SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "DPDK EAL init %d ", ret);
@@ -358,6 +605,16 @@ void dumpMatchPattern(void)
     SCLogNotice(" * ipv4:  %"PRId64" ",stats_matchPattern.ipv4);
     SCLogNotice(" * ipv6:  %"PRId64" ",stats_matchPattern.ipv6);
     SCLogNotice("-----------------------");
+
+    if (rte_acl_find_existing("suricata-ipv4")) {
+        SCLogNotice("----- ACL IPV4 DUMP (%u) ----", file_config.acl.ipv4AclCount);
+        rte_acl_dump(file_config.acl.ipv4AclCtx);
+    }
+
+    if (rte_acl_find_existing("suricata-ipv6")) {
+        SCLogNotice("----- ACL IPV6 DUMP (%u) ----", file_config.acl.ipv6AclCount);
+        rte_acl_dump(file_config.acl.ipv6AclCtx);
+    }
 
     return;
 }

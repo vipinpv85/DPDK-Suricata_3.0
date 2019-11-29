@@ -22,14 +22,22 @@
 #include "util-profiling.h"
 #include "host.h"
 
-
-
 extern uint8_t  portSpeed10;
 extern uint8_t  portSpeed100;
 extern uint8_t  portSpeed1000;
 extern uint8_t  portSpeed10000;
 uint8_t portSpeed [16];
 extern launchPtr launchFunc[5];
+
+#define OFF_ETHHEAD     (sizeof(struct ether_hdr))
+#define OFF_IPV42PROTO (offsetof(struct ipv4_hdr, next_proto_id))
+#define OFF_IPV62PROTO (offsetof(struct ipv6_hdr, proto))
+#define MBUF_IPV4_2PROTO(m)     \
+        rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETHHEAD + OFF_IPV42PROTO)
+#define MBUF_IPV6_2PROTO(m)     \
+        rte_pktmbuf_mtod_offset((m), uint8_t *, OFF_ETHHEAD + OFF_IPV62PROTO)
+
+
 /*
  * brief Structure to hold thread specific variables.
  */
@@ -135,6 +143,35 @@ void TmModuleDecodeDpdkRegister (void) {
     tmm_modules[TMM_DECODEDPDK].flags = TM_FLAG_DECODE_TM;
 }
 
+static inline void
+FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
+{
+    struct ether_hdr *eth_hdr;
+    uint32_t acl_res = 0;
+    int retAcl;
+    const uint8_t *data;
+
+    *res = 0;
+
+    eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
+    if ((eth_hdr->ether_type != 0xDD86) && (eth_hdr->ether_type != 0x0008)) {
+        dpdkStats [inPort].unsupported_pkt++; 
+        return;
+    }
+
+    if (eth_hdr->ether_type == 0x0008)
+        dpdkStats [inPort].ipv4_pkt++;
+    else
+        dpdkStats [inPort].ipv6_pkt++; 
+
+    data = (eth_hdr->ether_type == 0x0008) ? MBUF_IPV4_2PROTO(m) : MBUF_IPV6_2PROTO(m); /* pointer to key for lookup */
+    retAcl = rte_acl_classify(
+                 (eth_hdr->ether_type == 0x0008) ? file_config.acl.ipv4AclCtx : file_config.acl.ipv6AclCtx,
+                 &data, &acl_res, 1, 1); 
+    if (likely(retAcl == 0))
+        *res = acl_res;
+}
+
 void DpdkIntelReleasePacket(Packet *p)
 {
     uint8_t portId = (p->dpdkIntel_outPort);
@@ -146,7 +183,20 @@ void DpdkIntelReleasePacket(Packet *p)
     if (DPDKINTEL_GENCFG.OpMode == IDS) {
         SCLogDebug(" Free frame as its IDS ");
         rte_pktmbuf_free(m);
-    } else if (DPDKINTEL_GENCFG.OpMode == IPS || DPDKINTEL_GENCFG.OpMode == BYPASS) {
+    } else if (DPDKINTEL_GENCFG.OpMode == IPS) {
+       /* test packet action as drop, if true drop */
+       if (PACKET_TEST_ACTION(p, ACTION_DROP) == 0) {
+           if (rte_eth_tx_burst(portId, 0, (struct rte_mbuf **)&m, 1) != 1) {
+               SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", 
+                           portId, m, DPDKINTEL_GENCFG.OpMode);
+               rte_pktmbuf_free(m);
+           }
+       }
+       else {
+           SCLogDebug(" Pkt Action to DROP in IPS, hence free mbuf ");
+           rte_pktmbuf_free(m);
+       }
+    } else if (DPDKINTEL_GENCFG.OpMode == BYPASS) {
        if (rte_eth_tx_burst(portId, 0, (struct rte_mbuf **)&m, 1) != 1) {
            SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", 
                        portId, m, DPDKINTEL_GENCFG.OpMode);
@@ -169,26 +219,62 @@ static inline void DpdkIntelDumpCounters(DpdkIntelThreadVars_t *ptv)
     - update the process thread variables (ptv) with the following information
     - 
     */
-    struct rte_eth_stats stats;
-    rte_eth_stats_get(ptv->inIfaceId, &stats);
+    struct rte_eth_stats instats, outstats;
+    uint16_t inPort = portMap [ptv->inIfaceId].inport, outPort = portMap [ptv->inIfaceId].outport;
 
     SCLogDebug(" Interface to Dump Stats & Err is %u", ptv->inIfaceId);
 
-    SCLogNotice("Intf : %u", ptv->inIfaceId);
-    SCLogNotice(" + ring full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].ring_full,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].enq_err,
-                 dpdkStats [portMap [ptv->inIfaceId].outport].tx_err);
-    SCLogNotice(" + fail: Packet alloc %"PRIu64", Fail %"PRIu64,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].sc_pkt_null,
-                 dpdkStats [portMap [ptv->inIfaceId].inport].sc_fail);
+    SCLogNotice(" --- thread stats for Intf: %u to %u --- ", inPort, outPort);
+    SCLogNotice(" +++ ACL pkts +++");
+    SCLogNotice(" -- unexpected %"PRIu64,
+                dpdkStats[inPort].unsupported_pkt);
+    SCLogNotice(" -- ipv4 %"PRIu64, 
+                dpdkStats[inPort].ipv4_pkt);
+    SCLogNotice(" --- ipv6 %"PRIu64,
+                dpdkStats[inPort].ipv6_pkt);
 
-   /* fetch errr stats of DPDK info */
-    SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
-                 stats.ierrors, stats.oerrors, stats.rx_nombuf);
-    SCLogNotice(" + Queue Dropped pkts: %"PRIu64, stats.q_errors[0]);
-    //SCLogNotice(" + Bad CRC: %"PRIu64" LEN: %"PRIu64, stats.ibadcrc, stats.ibadlen);
-    SCLogNotice(" ---------------------------------------------------------- ");
+    SCLogNotice(" +++ ring +++");
+    SCLogNotice(" -- full %"PRIu64,
+                dpdkStats[inPort].ring_full);
+    SCLogNotice(" -- enq err %"PRIu64,
+                dpdkStats[inPort].enq_err);
+    SCLogNotice(" --  tx err %"PRIu64,
+                dpdkStats[outPort].tx_err);
+
+    if (0 == rte_eth_stats_get(inPort, &instats)){
+        SCLogNotice(" + in-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64, 
+            inPort, instats.ipackets, instats.opackets, instats.imissed);
+        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
+            instats.ierrors, instats.oerrors, instats.rx_nombuf);
+        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, instats.q_errors[0]);
+    }
+
+
+#if 0
+    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
+                dpdkStats[inPort].sc_pkt_null,
+                dpdkStats[inPort].sc_fail);
+    SCLogNotice(" --- DPDK stats for port %u ---", outPort);
+    SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
+                dpdkStats[outPort].unsupported_pkt,
+                dpdkStats[outPort].ipv4_pkt,
+                dpdkStats[outPort].ipv6_pkt);
+    SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
+                dpdkStats[outPort].ring_full,
+                dpdkStats[outPort].enq_err,
+                dpdkStats[inPort].tx_err);
+    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
+                dpdkStats[outPort].sc_pkt_null,
+                dpdkStats[outPort].sc_fail);
+       
+    if (0 == rte_eth_stats_get(outPort, &outstats)) {
+        SCLogNotice(" - out-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
+            outPort, outstats.ipackets, outstats.opackets, outstats.imissed);
+        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
+            outstats.ierrors, outstats.oerrors, outstats.rx_nombuf);
+        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, outstats.q_errors[0]);
+    }
+#endif
 
 #ifdef PACKET_STATISTICS
 #endif
@@ -300,6 +386,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 
     while(1) {
         if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
+            //DpdkIntelDumpCounters(ptv);
             SCReturnInt(TM_ECODE_OK);
         }
 
@@ -310,7 +397,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
         SCLogDebug("rte dequeue ringId: %d count: %d", ptv->ringBuffId, packet_q_len);
         /* ToDo: update counters - phase 2 */
         if (likely(packet_q_len)) {
-            /*printf("rte dequeue count: %d", packet_q_len);*/
+            /*SCLogNotice("rte dequeue count: %d", packet_q_len);*/
             for (j = 0; ((j < PREFETCH_OFFSET) && (j < packet_q_len)); j++) {
                 rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j], void *));
             }
@@ -516,10 +603,9 @@ TmEcode ReceiveDpdkThreadInit(ThreadVars *tv, void *initdata, void **data)
  */
 void ReceiveDpdkThreadExitStats(ThreadVars *tv, void *data) {
     DpdkIntelThreadVars_t *ditv = (DpdkIntelThreadVars_t *)data;
-
-    DpdkIntelDumpCounters(ditv);
     SCLogInfo("(%s) Packets %" PRIu64 ", bytes %" PRIu64 "", tv->name, ditv->pkts, ditv->bytes);
 
+    DpdkIntelDumpCounters(ditv);
     return;
 }
 
@@ -532,6 +618,8 @@ void ReceiveDpdkThreadExitStats(ThreadVars *tv, void *data) {
 TmEcode ReceiveDpdkThreadDeinit(ThreadVars *tv, void *data)
 {
     DpdkIntelThreadVars_t *ptv = (DpdkIntelThreadVars_t *)data;
+
+    SCLogDebug("RX-TX Intf Id in %d out %d\n", ptv->inIfaceId, ptv->outIfaceId);
 
     /* stop the dpdk port in use */
     dpdkPortUnSet(ptv->inIfaceId);
@@ -644,6 +732,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
     int32_t enq = 0, ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_eth_stats stats;
+    uint32_t acl_res = 0;
 
     uint32_t portBmpMap = *(uint32_t *) arg;
 
@@ -659,22 +748,35 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
     {
         uint8_t index = 0x00;
         uint16_t tmpMap = portBmpMap;
+        uint16_t inPort, outPort;
 
         if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             while (tmpMap) 
             {
+                inPort = portMap [index].inport;
+                outPort = portMap [index].outport;
                 if (tmpMap & 0x01) {
-                    if (0 == rte_eth_stats_get(portMap [index].inport, &stats))
+                    if (0 == rte_eth_stats_get(inPort, &stats))
                         SCLogNotice("inf %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-                                    portMap [index].inport, 
-                                    stats.ipackets, 
-                                    stats.opackets, 
-                                    stats.imissed);
+                                    inPort, stats.ipackets, stats.opackets, stats.imissed);
                 }
                 tmpMap = tmpMap >> 1;
                 index++;
-            }
 
+            SCLogNotice(" --- DPDK stats for port %u --- ", inPort);
+            SCLogNotice(" - pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
+                        dpdkStats[inPort].unsupported_pkt,
+                        dpdkStats[inPort].ipv4_pkt,
+                        dpdkStats[inPort].ipv6_pkt);
+            SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
+                        dpdkStats[inPort].ring_full,
+                        dpdkStats[inPort].enq_err,
+                        dpdkStats[outPort].tx_err);
+            SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
+                        dpdkStats[inPort].sc_pkt_null,
+                        dpdkStats[inPort].sc_fail);
+
+            }
             break;
         } /* end of suricata_ctl_flags */
 
@@ -690,7 +792,6 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                 if (likely(nb_rx > 0)) {
                     SCLogDebug("Port %u Frames: %u", inPort, nb_rx);
                     if (unlikely(stats_matchPattern.totalRules == 0)) {
-                        //rte_delay_us(1);
                         ret = rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
                         if (unlikely ((nb_rx - ret) != 0))
                         {
@@ -725,6 +826,15 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
+		        /* ACL check for rule match */
+                        FilterPackets(m, &acl_res, inPort);
+                        if (acl_res == 0) {
+                            if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
+
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [inPort].enq_err++;
@@ -741,6 +851,15 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         struct rte_mbuf *m = pkts_burst[j];
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
+
+		        /* ACL check for rule match */
+                        FilterPackets(m, &acl_res, inPort);
+                        if (acl_res == 0) {
+                            if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
 
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
@@ -760,7 +879,6 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                 if (likely(nb_rx > 0)) {
                     SCLogDebug("Port %u Frames: %u", outPort, nb_rx);
                     if (unlikely(stats_matchPattern.totalRules == 0)) {
-                        //rte_delay_us(1);
                         ret = rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
                         if (unlikely ((nb_rx - ret) != 0))
                         {
@@ -795,6 +913,15 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
 
+                        /* ACL check for rule match */
+                        FilterPackets(m, &acl_res, outPort);
+                        if (acl_res == 0) {
+                            if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
+
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
                             dpdkStats [outPort].enq_err++;
@@ -812,6 +939,15 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
 
                         SCLogDebug("add frame to RB %u len %d for %p",
                                      RingId, m->pkt_len, m);
+
+                        /* ACL check for rule match */
+                        FilterPackets(m, &acl_res, outPort);
+                        if (acl_res == 0) {
+                            if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
 
                         enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                         if (unlikely(enq != 1)) {
@@ -843,7 +979,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
     int32_t nb_rx = 0;
     int32_t enq = 0, ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-    struct rte_eth_stats stats;
+    uint32_t acl_res = 0;
 
     uint16_t inPort    = ((*(uint16_t *) arg) & 0x00FF) >> 0;
     uint16_t outPort   = ((*(uint16_t *) arg) & 0xFF00) >> 8;
@@ -860,28 +996,14 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
     while(1)
     {
         if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
-            if (0 == rte_eth_stats_get(inPort, &stats)) 
-                SCLogNotice("inf %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-                            inPort, 
-                            stats.ipackets, 
-                            stats.opackets, 
-                            stats.imissed);
-
-            if (0 == rte_eth_stats_get(outPort, &stats)) 
-                SCLogNotice("inf %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-                            outPort, 
-                            stats.ipackets, 
-                            stats.opackets, 
-                            stats.imissed);
-
             break;
         } /* end of suricata_ctl_flags */
 
+        RingId = inPort; /* Ring Index same as port Index from DPDK */
         nb_rx = rte_eth_rx_burst(inPort, 0, pkts_burst, MAX_PKT_BURST);
         if (likely(nb_rx > 0)) {
             SCLogDebug("Port %u Frames: %u", inPort, nb_rx);
             if (unlikely(stats_matchPattern.totalRules == 0)) {
-                rte_delay_us(1);
                 ret = rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
                 if (unlikely ((nb_rx - ret) != 0))
                 {
@@ -895,8 +1017,6 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 }
                 continue;
             } /* end of totalRules */
-
-            RingId = inPort; /* Ring Index same as port Index from DPDK */
 
             if (unlikely(1 == rte_ring_full(srb [RingId]))) {
                 dpdkStats [inPort].ring_full++;
@@ -916,6 +1036,15 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+                FilterPackets(m, &acl_res, inPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                        rte_pktmbuf_free(m);
+                        continue;
+                    }
+                }
+
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
@@ -933,6 +1062,15 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+                FilterPackets(m, &acl_res, inPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                        rte_pktmbuf_free(m);
+                        continue;
+                    }
+                }
+
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
@@ -947,6 +1085,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
             /* End of enqueue */
         } /* end of 1st intf*/
 
+        RingId = outPort; /* Ring Index same as port Index from DPDK */
         nb_rx = rte_eth_rx_burst(outPort, 0, pkts_burst, MAX_PKT_BURST);
         if (likely(nb_rx > 0)) {
             SCLogDebug("Port %u Frames: %u", outPort, nb_rx);
@@ -966,8 +1105,6 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 continue;
             } /* end of totalRules */
 
-            RingId = outPort; /* Ring Index same as port Index from DPDK */
-
             if (unlikely(1 == rte_ring_full(srb [RingId]))) {
                 dpdkStats [outPort].ring_full++;
                 for (ret = 0; ret < nb_rx; ret++)
@@ -986,6 +1123,15 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+		FilterPackets(m, &acl_res, outPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                        rte_pktmbuf_free(m);
+                        continue;
+                    }
+                }
+
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [outPort].enq_err++;
@@ -1003,6 +1149,15 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
 
                 SCLogDebug("add frame to RB %u len %d for %p",
                              RingId, m->pkt_len, m);
+
+		/* ACL check for rule match */
+                FilterPackets(m, &acl_res, outPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                        rte_pktmbuf_free(m);
+                        continue;
+                    }
+                }
 
                 enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
@@ -1030,11 +1185,10 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
     int32_t enq = 0;
     int32_t ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-    struct rte_eth_stats stats;
+    uint32_t acl_res = 0;
 
     uint16_t inPort  = ((*(uint16_t *) arg) & 0x00FF) >> 0;
     uint16_t outPort = ((*(uint16_t *) arg) & 0xFF00) >> 8;
-    uint16_t ringId  = inPort; /* ringID as same as input port number*/
 
     SCLogNotice("============ IPS inside %s =============", __func__);
     SCLogNotice(" port %u, core %u, enable %d, socket %d phy %d", 
@@ -1046,18 +1200,11 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
 
     while(1)
     {
-        if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
-            if (0 == rte_eth_stats_get(inPort, &stats)) {
-                SCLogNotice("inf %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-                            inPort, 
-                            stats.ipackets, 
-                            stats.opackets, 
-                            stats.imissed);
-            }
-
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             break;
         } /* end of suricata_ctl_flags */
 
+    	uint16_t ringId  = inPort; /* ringID as same as input port number*/
         nb_rx = rte_eth_rx_burst(inPort, 0, pkts_burst, MAX_PKT_BURST);
         if (likely(nb_rx > 0)) {
             SCLogDebug("Port %u Frames: %u", inPort, nb_rx);
@@ -1096,6 +1243,15 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 SCLogDebug("add frame to RB %u len %d for %p",
                              ringId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+                FilterPackets(m, &acl_res, inPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                       rte_pktmbuf_free(m);
+                       continue;
+                    }
+                }
+
                 enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
@@ -1108,12 +1264,21 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 }
             } 
 
-            for (; j < PREFETCH_OFFSET; j++) {
+            for (; j < nb_rx; j++) {
                 struct rte_mbuf *m = pkts_burst[j];
 
                 SCLogDebug("add frame to RB %u len %d for %p",
                              ringId, m->pkt_len, m);
 
+		/* ACL check for rule match */
+                FilterPackets(m, &acl_res, inPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                       rte_pktmbuf_free(m);
+                       continue;
+                    }
+                }
+ 
                 enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
                 if (unlikely(enq != 1)) {
                     dpdkStats [inPort].enq_err++;
@@ -1127,6 +1292,95 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
             } 
             /* End of enqueue */
         }
+
+    	ringId  = outPort; /* ringID as same as input port number*/
+        nb_rx = rte_eth_rx_burst(outPort, 0, pkts_burst, MAX_PKT_BURST);
+        if (likely(nb_rx > 0)) {
+            SCLogDebug("Port %u Frames: %u", outPort, nb_rx);
+
+            if (unlikely(stats_matchPattern.totalRules == 0)) {
+                ret = rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
+                if (unlikely ((nb_rx - ret) != 0))
+                {
+                    dpdkStats [inPort].tx_err += (nb_rx - ret);
+
+                    SCLogDebug("Failed to send Packet %d ret : %d",
+                                            inPort, ret);
+
+                    for (; ret < nb_rx; ret++)
+                        rte_pktmbuf_free(pkts_burst[ret]);
+                }
+                continue;
+            } /* end of totalRules */
+
+            if (unlikely(1 == rte_ring_full(srb [ringId]))) {
+                dpdkStats [outPort].ring_full++;
+                for (ret = 0; ret < nb_rx; ret++)
+                    rte_pktmbuf_free(pkts_burst[ret]);
+                continue;
+            } /* end of ring full */
+
+            for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
+                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
+            }
+
+            for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
+                struct rte_mbuf *m = pkts_burst[j];
+                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
+
+                SCLogDebug("add frame to RB %u len %d for %p",
+                             ringId, m->pkt_len, m);
+
+		/* ACL check for rule match */
+                FilterPackets(m, &acl_res, outPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                       rte_pktmbuf_free(m);
+                       continue;
+                    }
+                }
+
+                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
+                if (unlikely(enq != 1)) {
+                    dpdkStats [outPort].enq_err++;
+                    SCLogDebug(
+                               " RingEnq %d core :%u full %d",
+                               enq, rte_lcore_id(),
+                               rte_ring_full(srb [ringId]));
+                    rte_pktmbuf_free(m);
+                    continue;
+                }
+            } 
+
+            for (; j < nb_rx; j++) {
+                struct rte_mbuf *m = pkts_burst[j];
+
+                SCLogDebug("add frame to RB %u len %d for %p",
+                             ringId, m->pkt_len, m);
+
+		/* ACL check for rule match */
+                FilterPackets(m, &acl_res, outPort);
+                if (acl_res == 0) {
+                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                       rte_pktmbuf_free(m);
+                       continue;
+                    }
+                }
+ 
+                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
+                if (unlikely(enq != 1)) {
+                    dpdkStats [outPort].enq_err++;
+                    SCLogDebug(
+                               " RingEnq %d core :%u full %d",
+                               enq, rte_lcore_id(),
+                               rte_ring_full(srb [ringId]));
+                    rte_pktmbuf_free(m);
+                    continue;
+                }
+            } 
+            /* End of enqueue */
+        }
+
     } /* end of while */
 
     return 0;
@@ -1147,6 +1401,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
     int32_t ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_eth_stats stats;
+    uint32_t acl_res = 0;
 
     SCLogNotice("IDS ports %x, core %u, enble %d, scket %d phy %d", 
             DPDKINTEL_GENCFG.Port/* port count */, rte_lcore_id(),
@@ -1171,8 +1426,12 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                     SCLogNotice("IDS port %u", portMap [portIndex].inport);
                     SCLogNotice(" - pkts: RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
                             stats.ipackets, stats.opackets, stats.imissed);
+                    SCLogNotice(" - pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
+                                dpdkStats[portMap [portIndex].inport].unsupported_pkt,
+                                dpdkStats[portMap [portIndex].inport].ipv4_pkt,
+                                dpdkStats[portMap [portIndex].inport].ipv6_pkt);
                     SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                                dpdkStats [portMap [portIndex].inport].ring_full,
+                                dpdkStats[portMap [portIndex].inport].ring_full,
                                 dpdkStats[portMap [portIndex].inport].enq_err,
                                 dpdkStats[portMap [portIndex].outport].tx_err);
                     SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
@@ -1211,8 +1470,13 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                     SCLogDebug("add frame to RB %u len %d for %p",
                                  portMap [portIndex].ringid, m->pkt_len, m);
 
-                    /* ToDo: update the stats under Debug mode */
-
+		    /* ACL check for rule match */
+                    FilterPackets(m, &acl_res, portMap [portIndex].inport);
+                    if (unlikely(acl_res == 0)) {
+                        rte_pktmbuf_free(m);
+                        continue;
+                    }
+ 
                     enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1, &freespace);
                     if (unlikely(enq != 1)) {
                         dpdkStats [portMap [portIndex].inport].enq_err++;
@@ -1231,7 +1495,12 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                     SCLogDebug("add frame to RB %u len %d for %p",
                                  portMap [portIndex].ringid, m->pkt_len, m);
 
-                    /* ToDo: update the stats under Debug mode */
+		    /* ACL check for rule match */
+                    FilterPackets(m, &acl_res, portMap [portIndex].inport);
+                    if (unlikely(acl_res == 0)) {
+                        rte_pktmbuf_free(m);
+                        continue;
+                    }
 
                     enq = rte_ring_enqueue_burst(srb [portMap [portIndex].ringid], (void *)&m, 1, &freespace);
                     if (unlikely(enq != 1)) {

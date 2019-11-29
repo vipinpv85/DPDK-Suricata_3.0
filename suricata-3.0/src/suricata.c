@@ -2268,10 +2268,18 @@ int main(int argc, char **argv)
     ConfInit();
 
 #ifdef HAVE_DPDKINTEL
-/* ToDo: need to rte_init function properly here only */
-    if (dpdkEalInit() < 0) { 
+    if (ParseDpdkConf() == NULL) {
+        SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " failed to fetch configuration for dpdk");
         exit(EXIT_FAILURE);
     }
+
+/* ToDo: need to rte_init function properly here only */
+    if (dpdkEalInit() < 0) {
+        SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " failed to initialize dpdk rte_eal_init");
+        exit(EXIT_FAILURE);
+    }
+
+    dpdkAclConfSetup();
 #endif /* HAVE_DPDKINTEL */
 
     if (ParseCommandLine(argc, argv, &suri) != TM_ECODE_OK) {
@@ -2525,6 +2533,21 @@ int main(int argc, char **argv)
     int engine_retval = EXIT_SUCCESS;
 #ifdef HAVE_DPDKINTEL
     if (suri.run_mode == RUNMODE_DPDKINTEL) {
+	/* build ACL rules */
+        if (file_config.acl.ipv4AclCount) {
+            if (addDpdkAcl4Build() != 0) {
+                SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " Failed to build the IPv4 ACL");
+                exit(EXIT_FAILURE);
+            }
+        }
+
+        if (file_config.acl.ipv6AclCount) {
+            if (addDpdkAcl6Build() != 0) {
+                SCLogError(SC_ERR_DPDKINTEL_DPDKAPI, " Failed to build the IPv6 ACL");
+                exit(EXIT_FAILURE);
+            }
+        }
+
         launchDpdkFrameParser();
     }
 #endif
@@ -2592,7 +2615,12 @@ int main(int argc, char **argv)
     if (suri.run_mode == RUNMODE_DPDKINTEL) 
     {
        rte_eal_mp_wait_lcore();
-       /* ToDo: cleanup mbuf anf descriptors  */ 
+       /* ToDo: stop ports, cleanup mbuf, descriptors, acl */
+       rte_acl_free(file_config.acl.ipv4AclCtx);
+       rte_acl_free(file_config.acl.ipv6AclCtx);
+
+       //rte_acl_free(file_config.acl.ipv4Acl);
+       //rte_acl_free(file_config.acl.ipv6Acl);
     }
 #endif /* HAVE_DPDKINTEL */
 

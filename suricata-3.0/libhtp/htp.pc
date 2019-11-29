@@ -1,4 +1,4 @@
-prefix=/usr/local
+prefix=/home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf
 exec_prefix=${prefix}
 libdir=${exec_prefix}/lib
 includedir=${prefix}/include

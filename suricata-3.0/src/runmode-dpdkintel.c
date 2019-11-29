@@ -83,7 +83,7 @@ int DpdkIntelRegisterDeviceStreams()
 void ParseDpdkConfig(void)
 {
     char *oface = NULL, *iface = NULL, *val = NULL;
-    uint8_t portIndex = 0, portTotal = rte_eth_dev_count(), portInOutSet = 0x00;
+    uint8_t portIndex = 0, portTotal = rte_eth_dev_count_avail(), portInOutSet = 0x00;
     DPDKINTEL_GENCFG.Port = 0;
     uint32_t portMapIndex = 0;
     int index = 0;

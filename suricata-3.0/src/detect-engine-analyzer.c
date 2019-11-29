@@ -35,7 +35,10 @@
 #include "detect-flow.h"
 #include "detect-flags.h"
 #include "util-print.h"
+
+#ifdef HAVE_DPDKINTEL
 #include "util-dpdk-common.h"
+#endif
 
 static int rule_warnings_only = 0;
 static FILE *rule_engine_analysis_FD = NULL;
@@ -506,82 +509,119 @@ void dpdkRuleAnalysis(Signature *s)
 {
     stats_matchPattern.totalRules++;
     uint8_t checkProto;
-    if (s->alproto == ALPROTO_HTTP)
-    {
-        stats_matchPattern.http ++;
+    int ret = 0;
+
+    if (s->addr_dst_match4_cnt || s->addr_src_match4_cnt) {
+	uint32_t srcIp = (s->addr_src_match4 == NULL) ? 0x0 : s->addr_src_match4->ip;
+	uint32_t srcIpMask = (s->addr_src_match4 == NULL) ? 0x0 :
+            (~(s->addr_src_match4->ip2 - s->addr_src_match4->ip) & ((uint32_t)-1));
+
+        uint32_t dstIp = (s->addr_dst_match4 == NULL) ? 0x0 : s->addr_dst_match4->ip;
+        uint32_t dstIpMask = (s->addr_dst_match4 == NULL) ? 0x0 :
+            (~(s->addr_dst_match4->ip2 - s->addr_dst_match4->ip) & ((uint32_t)-1));
+
+        ret = addDpdkAcl4Rule(srcIp, srcIpMask, dstIp, dstIpMask);
+        if (ret != 0) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
+            exit(EXIT_FAILURE);
+        }
     }
-    else if (s->alproto == ALPROTO_FTP)
-    {
-        stats_matchPattern.ftp ++;
+
+    if (s->addr_dst_match6_cnt || s->addr_src_match6_cnt) {
+	uint32_t srcIp[4] = {0, 0, 0, 0};
+	uint32_t srcIpMask[4] = {0, 0, 0, 0};
+
+        srcIp[0] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[0];
+	srcIp[1] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[1];
+	srcIp[2] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[2];
+	srcIp[3] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[3];
+
+        srcIpMask[0] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[0] - s->addr_src_match6->ip[0]) & ((uint32_t)-1));
+        srcIpMask[1] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[1] - s->addr_src_match6->ip[1]) & ((uint32_t)-1));
+        srcIpMask[2] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[2] - s->addr_src_match6->ip[2]) & ((uint32_t)-1));
+        srcIpMask[3] = (s->addr_src_match6 == NULL) ? 0x0 :
+            (~(s->addr_src_match6->ip2[3] - s->addr_src_match6->ip[3]) & ((uint32_t)-1));
+
+	uint32_t dstIp[4] = {0, 0, 0, 0};
+	uint32_t dstIpMask[4] = {0, 0, 0, 0};
+
+        dstIp[0] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[0];
+        dstIp[1] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[1];
+        dstIp[2] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[2];
+        dstIp[3] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[3];
+
+        dstIpMask[0] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[0] - s->addr_dst_match6->ip[0]) & ((uint32_t)-1));
+        dstIpMask[1] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[1] - s->addr_dst_match6->ip[1]) & ((uint32_t)-1));
+        dstIpMask[2] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[2] - s->addr_dst_match6->ip[2]) & ((uint32_t)-1));
+        dstIpMask[3] = (s->addr_dst_match6 == NULL) ? 0x0 :
+            (~(s->addr_dst_match6->ip2[3] - s->addr_dst_match6->ip[3]) & ((uint32_t)-1));
+
+        ret = addDpdkAcl6Rule(srcIp, srcIpMask, dstIp, dstIpMask);
+        if (ret != 0) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
+            exit(EXIT_FAILURE);
+        }
     }
-    else if (s->alproto == ALPROTO_SMTP)
-    {
-        stats_matchPattern.smtp ++;
-    }
-    else if (s->alproto == ALPROTO_TLS)
-    {
-        stats_matchPattern.tls ++;
-    }
-    else if (s->alproto == ALPROTO_DNS)
-    {
-        stats_matchPattern.dns ++;
-    }
-    else if (s->alproto == ALPROTO_SSH)
-    {
-        stats_matchPattern.ssh ++;
-    }
-    else if (s->alproto == ALPROTO_SMB)
-    {
-        stats_matchPattern.smb ++;
-    }
-    else if (s->alproto == ALPROTO_SMB2)
-    {
-        stats_matchPattern.smb2 ++;
-    }
-    else if (s->alproto == ALPROTO_DCERPC)
-    {
-        stats_matchPattern.dcerpc ++;
+
+#if 0
+    printf(" action %x, proto.flags %x \n", s->action, s->proto.flags);
+#endif
+
+    if (s->alproto) {
+        if (s->alproto == ALPROTO_HTTP)
+            stats_matchPattern.http ++;
+        else if (s->alproto == ALPROTO_FTP)
+            stats_matchPattern.ftp ++;
+        else if (s->alproto == ALPROTO_SMTP)
+            stats_matchPattern.smtp ++;
+        else if (s->alproto == ALPROTO_TLS)
+            stats_matchPattern.tls ++;
+        else if (s->alproto == ALPROTO_DNS)
+            stats_matchPattern.dns ++;
+        else if (s->alproto == ALPROTO_SSH)
+            stats_matchPattern.ssh ++;
+        else if (s->alproto == ALPROTO_SMB)
+            stats_matchPattern.smb ++;
+        else if (s->alproto == ALPROTO_SMB2)
+            stats_matchPattern.smb2 ++;
+        else if (s->alproto == ALPROTO_DCERPC)
+            stats_matchPattern.dcerpc ++;
     }
 
     checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_TCP);
     if(checkProto == 1)
-    {
         stats_matchPattern.tcp ++;
-    }
+
     checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_UDP);
     if(checkProto == 1)
-    {
         stats_matchPattern.udp ++;
-    }
+
     checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_SCTP);
     if(checkProto == 1)
-    {
         stats_matchPattern.sctp ++;
-    }
+
     checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_ICMPV6);
     if(checkProto == 1)
-    {
         stats_matchPattern.icmpv6 ++;
-    }
+
     checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_GRE);
     if(checkProto == 1)
-    {
         stats_matchPattern.gre ++;
-    }
+
     checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_RAW);
     if(checkProto == 1)
-    {
         stats_matchPattern.raw ++;
-    }
-    if (s->proto.flags & DETECT_PROTO_IPV4)
-    {
-        stats_matchPattern.ipv4 ++;
-    }
-    if (s->proto.flags & DETECT_PROTO_IPV6)
-    {
-        stats_matchPattern.ipv6 ++;
-    }
 
+    if (s->proto.flags & DETECT_PROTO_IPV4)
+        stats_matchPattern.ipv4 ++;
+    if (s->proto.flags & DETECT_PROTO_IPV6)
+        stats_matchPattern.ipv6 ++;
 }
 
 #endif 

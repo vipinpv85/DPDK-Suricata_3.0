@@ -67,7 +67,7 @@ int ListCudaCards()
 #ifdef HAVE_DPDKINTEL
 void ListDpdkIntelPorts (void)
 {
-    uint16_t portCount = rte_eth_dev_count(), portIndex = 0;
+    uint16_t portCount = rte_eth_dev_count_avail(), portIndex = 0;
 
     uint16_t mtu;
     struct rte_eth_link link;
