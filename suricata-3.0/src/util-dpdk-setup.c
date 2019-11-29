@@ -413,7 +413,7 @@ void dpdkAclConfSetup(void)
     SCLogNotice("DPDK ACL setup\n");
 
     acl_param.socket_id = 0;
-    acl_param.max_rule_num = 10240 * 2;
+    acl_param.max_rule_num = 1024 * 1024 * 8;
 
     /* setup acl - IPv4 */
     acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip4_defs));
@@ -431,7 +431,7 @@ void dpdkAclConfSetup(void)
     acl_param.name = "suricata-ipv6";
     ctx = rte_acl_create(&acl_param);
     if (ctx == NULL) {
-        SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv4 fail!!!");
+        SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv6 fail!!!");
         exit(EXIT_FAILURE);
     }
     SCLogNotice("DPDK ipv6AclCtx: %p done!", ctx);
@@ -439,7 +439,7 @@ void dpdkAclConfSetup(void)
 
 }
 
-int32_t addDpdkAcl4Rule(uint32_t srcIp, uint32_t srcIpMask, uint32_t dstIp, uint32_t dstIpMask)
+int32_t addDpdkAcl4Rule(uint32_t srcIp, uint32_t srcIpMask, uint32_t dstIp, uint32_t dstIpMask, uint8_t proto)
 {
     int ret = 0;
 
@@ -450,14 +450,12 @@ int32_t addDpdkAcl4Rule(uint32_t srcIp, uint32_t srcIpMask, uint32_t dstIp, uint
     testv4.data.priority = 0xff;
     testv4.data.userdata = 0xdead;
 
-    if (dstIpMask) {
-        testv4.field[DST_FIELD_IPV4].value.u32 = dstIp;
-        testv4.field[DST_FIELD_IPV4].mask_range.u32 = dstIpMask;
-    }
-    if (srcIpMask) {
-        testv4.field[SRC_FIELD_IPV4].value.u32 = srcIp;
-        testv4.field[SRC_FIELD_IPV4].mask_range.u32 = srcIpMask;
-    }
+    testv4.field[PROTO_FIELD_IPV4].value.u8 = proto;
+    testv4.field[PROTO_FIELD_IPV4].mask_range.u8 = 0xff;
+    testv4.field[DST_FIELD_IPV4].value.u32 = dstIp;
+    testv4.field[DST_FIELD_IPV4].mask_range.u32 = dstIpMask;
+    testv4.field[SRC_FIELD_IPV4].value.u32 = srcIp;
+    testv4.field[SRC_FIELD_IPV4].mask_range.u32 = srcIpMask;
 
     //rte_acl_dump(file_config.acl.ipv4AclCtx);
     ret = rte_acl_add_rules(file_config.acl.ipv4AclCtx, (const struct rte_acl_rule *) rules, 1);
@@ -470,7 +468,7 @@ int32_t addDpdkAcl4Rule(uint32_t srcIp, uint32_t srcIpMask, uint32_t dstIp, uint
     return ret;
 }
 
-int32_t addDpdkAcl6Rule(uint32_t srcIp[4], uint32_t srcIpMask[4], uint32_t dstIp[4], uint32_t dstIpMask[4])
+int32_t addDpdkAcl6Rule(uint32_t srcIp[4], uint32_t srcIpMask[4], uint32_t dstIp[4], uint32_t dstIpMask[4], uint8_t proto)
 {
     int ret = 0;
 
@@ -481,42 +479,24 @@ int32_t addDpdkAcl6Rule(uint32_t srcIp[4], uint32_t srcIpMask[4], uint32_t dstIp
     testv6.data.priority = 0xff;
     testv6.data.userdata = 0xdead;
 
-    if (dstIpMask[0]) {
-        testv4.field[IP6_DST0].value.u32 = dstIp[0];
-        testv4.field[IP6_DST0].mask_range.u32 = dstIpMask[0];
-    }
-    if (dstIpMask[1]) {
-        testv4.field[IP6_DST1].value.u32 = dstIp[1];
-        testv4.field[IP6_DST1].mask_range.u32 = dstIpMask[1];
-    }
-    if (dstIpMask[2]) {
-        testv4.field[IP6_DST2].value.u32 = dstIp[2];
-        testv4.field[IP6_DST2].mask_range.u32 = dstIpMask[2];
-    }
-    if (dstIpMask[3]) {
-        testv4.field[IP6_DST3].value.u32 = dstIp[3];
-        testv4.field[IP6_DST3].mask_range.u32 = dstIpMask[3];
-    }
-
-    if (srcIpMask[0]) {
-        testv4.field[IP6_SRC0].value.u32 = srcIp[0];
-        testv4.field[IP6_SRC0].mask_range.u32 = srcIpMask[0];
-    }
-
-    if (srcIpMask[1]) {
-        testv4.field[IP6_SRC1].value.u32 = srcIp[1];
-        testv4.field[IP6_SRC1].mask_range.u32 = srcIpMask[1];
-    }
-
-    if (srcIpMask[2]) {
-        testv4.field[IP6_SRC2].value.u32 = srcIp[2];
-        testv4.field[IP6_SRC2].mask_range.u32 = srcIpMask[2];
-    }
-
-    if (srcIpMask[3]) {
-        testv4.field[IP6_SRC3].value.u32 = srcIp[3];
-        testv4.field[IP6_SRC3].mask_range.u32 = srcIpMask[3];
-    }
+    testv6.field[IP6_PROTO].value.u8 = proto;
+    testv6.field[IP6_PROTO].mask_range.u8 = 0xff;
+    testv6.field[IP6_DST0].value.u32 = dstIp[0];
+    testv6.field[IP6_DST0].mask_range.u32 = dstIpMask[0];
+    testv6.field[IP6_DST1].value.u32 = dstIp[1];
+    testv6.field[IP6_DST1].mask_range.u32 = dstIpMask[1];
+    testv6.field[IP6_DST2].value.u32 = dstIp[2];
+    testv6.field[IP6_DST2].mask_range.u32 = dstIpMask[2];
+    testv6.field[IP6_DST3].value.u32 = dstIp[3];
+    testv6.field[IP6_DST3].mask_range.u32 = dstIpMask[3];
+    testv6.field[IP6_SRC0].value.u32 = srcIp[0];
+    testv6.field[IP6_SRC0].mask_range.u32 = srcIpMask[0];
+    testv6.field[IP6_SRC1].value.u32 = srcIp[1];
+    testv6.field[IP6_SRC1].mask_range.u32 = srcIpMask[1];
+    testv6.field[IP6_SRC2].value.u32 = srcIp[2];
+    testv6.field[IP6_SRC2].mask_range.u32 = srcIpMask[2];
+    testv6.field[IP6_SRC3].value.u32 = srcIp[3];
+    testv6.field[IP6_SRC3].mask_range.u32 = srcIpMask[3];
 
     //rte_acl_dump(file_config.acl.ipv4AclCtx);
     ret = rte_acl_add_rules(file_config.acl.ipv6AclCtx, (const struct rte_acl_rule *) rules, 1);

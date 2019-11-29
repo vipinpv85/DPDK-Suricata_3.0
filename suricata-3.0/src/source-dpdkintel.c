@@ -149,7 +149,7 @@ FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
     struct ether_hdr *eth_hdr;
     uint32_t acl_res = 0;
     int retAcl;
-    const uint8_t *data;
+    const uint8_t *data[1];
 
     *res = 0;
 
@@ -159,31 +159,37 @@ FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
         return;
     }
 
-    if (eth_hdr->ether_type == 0x0008)
-        dpdkStats [inPort].ipv4_pkt++;
-    else
-        dpdkStats [inPort].ipv6_pkt++; 
+    if (eth_hdr->ether_type == 0x0008) {
+        if (likely(file_config.acl.ipv4AclCount)) {
+            dpdkStats [inPort].ipv4_pkt++;
+            data[0] = MBUF_IPV4_2PROTO(m);
+            retAcl = rte_acl_classify_alg(
+                         file_config.acl.ipv4AclCtx,
+                         &data[0], &acl_res, 1, 1, RTE_ACL_CLASSIFY_SSE); 
 
-    data = (eth_hdr->ether_type == 0x0008) ? MBUF_IPV4_2PROTO(m) : MBUF_IPV6_2PROTO(m); /* pointer to key for lookup */
-    retAcl = rte_acl_classify(
-                 (eth_hdr->ether_type == 0x0008) ? file_config.acl.ipv4AclCtx : file_config.acl.ipv6AclCtx,
-                 &data, &acl_res, 1, 1); 
-
-    if (likely(retAcl == 0)) {
-        *res = acl_res;
-
-        if (eth_hdr->ether_type == 0x0008)
-            dpdkStats [inPort].ipv4_pkt_success++;
-        else
-            dpdkStats [inPort].ipv6_pkt_success++; 
+            if (likely(retAcl == 0)) {
+                *res = acl_res;
+                dpdkStats [inPort].ipv4_pkt_success++;
+            } else {
+                dpdkStats [inPort].ipv4_pkt_fail++;
+            }
+        }
     } else {
+        if (file_config.acl.ipv6AclCount) {
+            dpdkStats [inPort].ipv6_pkt++; 
+            data[0] = MBUF_IPV6_2PROTO(m);
+            retAcl = rte_acl_classify_alg(
+                         file_config.acl.ipv6AclCtx,
+                         &data[0], &acl_res, 1, 1, RTE_ACL_CLASSIFY_SSE); 
 
-        if (eth_hdr->ether_type == 0x0008)
-            dpdkStats [inPort].ipv4_pkt_fail++;
-        else
-            dpdkStats [inPort].ipv6_pkt_fail++; 
+            if (likely(retAcl == 0)) {
+                *res = acl_res;
+                dpdkStats [inPort].ipv6_pkt_success++; 
+            } else {
+                dpdkStats [inPort].ipv6_pkt_fail++; 
+            }
+        }
     }
-
 }
 
 void DpdkIntelReleasePacket(Packet *p)

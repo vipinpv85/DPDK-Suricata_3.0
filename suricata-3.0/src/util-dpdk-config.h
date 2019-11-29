@@ -174,8 +174,8 @@ typedef struct
     void *ipv6AclCtx;
     void *ipv4AclRules;
     void *ipv6AclRules;
-    uint16_t ipv4AclCount;
-    uint16_t ipv6AclCount;
+    uint32_t ipv4AclCount;
+    uint32_t ipv6AclCount;
 } DpdkConfig_t;
 
 
