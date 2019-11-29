@@ -453,6 +453,10 @@ typedef struct
     uint64_t unsupported_pkt;
     uint64_t ipv4_pkt;
     uint64_t ipv6_pkt;
+    uint64_t ipv4_pkt_success;
+    uint64_t ipv6_pkt_success;
+    uint64_t ipv4_pkt_fail;
+    uint64_t ipv6_pkt_fail;
      //! Tx Error
     uint64_t tx_err;
      //! Ring Full

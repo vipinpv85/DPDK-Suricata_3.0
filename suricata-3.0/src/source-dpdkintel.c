@@ -168,8 +168,22 @@ FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
     retAcl = rte_acl_classify(
                  (eth_hdr->ether_type == 0x0008) ? file_config.acl.ipv4AclCtx : file_config.acl.ipv6AclCtx,
                  &data, &acl_res, 1, 1); 
-    if (likely(retAcl == 0))
+
+    if (likely(retAcl == 0)) {
         *res = acl_res;
+
+        if (eth_hdr->ether_type == 0x0008)
+            dpdkStats [inPort].ipv4_pkt_success++;
+        else
+            dpdkStats [inPort].ipv6_pkt_success++; 
+    } else {
+
+        if (eth_hdr->ether_type == 0x0008)
+            dpdkStats [inPort].ipv4_pkt_fail++;
+        else
+            dpdkStats [inPort].ipv6_pkt_fail++; 
+    }
+
 }
 
 void DpdkIntelReleasePacket(Packet *p)
@@ -230,8 +244,14 @@ static inline void DpdkIntelDumpCounters(DpdkIntelThreadVars_t *ptv)
                 dpdkStats[inPort].unsupported_pkt);
     SCLogNotice(" -- ipv4 %"PRIu64, 
                 dpdkStats[inPort].ipv4_pkt);
+    SCLogNotice(" - acl: ipv4 success %"PRIu64", fail %"PRIu64,
+        dpdkStats[inPort].ipv4_pkt_success,
+        dpdkStats[inPort].ipv4_pkt_fail);
     SCLogNotice(" --- ipv6 %"PRIu64,
                 dpdkStats[inPort].ipv6_pkt);
+    SCLogNotice(" - acl: ipv6 success %"PRIu64", fail %"PRIu64,
+        dpdkStats[inPort].ipv6_pkt_success,
+        dpdkStats[inPort].ipv6_pkt_fail);
 
     SCLogNotice(" +++ ring +++");
     SCLogNotice(" -- full %"PRIu64,
@@ -768,6 +788,12 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         dpdkStats[inPort].unsupported_pkt,
                         dpdkStats[inPort].ipv4_pkt,
                         dpdkStats[inPort].ipv6_pkt);
+            SCLogNotice(" - acl: ipv4 success %"PRIu64", fail %"PRIu64,
+                dpdkStats[inPort].ipv4_pkt_success,
+                dpdkStats[inPort].ipv4_pkt_fail);
+            SCLogNotice(" - acl: ipv6 success %"PRIu64", fail %"PRIu64,
+                dpdkStats[inPort].ipv6_pkt_success,
+                dpdkStats[inPort].ipv6_pkt_fail);
             SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
                         dpdkStats[inPort].ring_full,
                         dpdkStats[inPort].enq_err,
@@ -1430,6 +1456,12 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
                                 dpdkStats[portMap [portIndex].inport].unsupported_pkt,
                                 dpdkStats[portMap [portIndex].inport].ipv4_pkt,
                                 dpdkStats[portMap [portIndex].inport].ipv6_pkt);
+                    SCLogNotice(" - acl: ipv4 success %"PRIu64", fail %"PRIu64,
+                                dpdkStats[portMap [portIndex].inport].ipv4_pkt_success,
+                                dpdkStats[portMap [portIndex].inport].ipv4_pkt_fail);
+                    SCLogNotice(" - acl: ipv6 success %"PRIu64", fail %"PRIu64,
+                                dpdkStats[portMap [portIndex].inport].ipv6_pkt_success,
+                                dpdkStats[portMap [portIndex].inport].ipv6_pkt_fail);
                     SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
                                 dpdkStats[portMap [portIndex].inport].ring_full,
                                 dpdkStats[portMap [portIndex].inport].enq_err,

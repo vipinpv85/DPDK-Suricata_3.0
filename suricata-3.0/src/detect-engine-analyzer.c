@@ -514,11 +514,15 @@ void dpdkRuleAnalysis(Signature *s)
     if (s->addr_dst_match4_cnt || s->addr_src_match4_cnt) {
 	uint32_t srcIp = (s->addr_src_match4 == NULL) ? 0x0 : s->addr_src_match4->ip;
 	uint32_t srcIpMask = (s->addr_src_match4 == NULL) ? 0x0 :
-            (~(s->addr_src_match4->ip2 - s->addr_src_match4->ip) & ((uint32_t)-1));
+            /*(~(s->addr_src_match4->ip2 - s->addr_src_match4->ip) & ((uint32_t)-1));*/
+            s->addr_src_match4->ip2;
 
         uint32_t dstIp = (s->addr_dst_match4 == NULL) ? 0x0 : s->addr_dst_match4->ip;
         uint32_t dstIpMask = (s->addr_dst_match4 == NULL) ? 0x0 :
-            (~(s->addr_dst_match4->ip2 - s->addr_dst_match4->ip) & ((uint32_t)-1));
+            /*(~(s->addr_dst_match4->ip2 - s->addr_dst_match4->ip) & ((uint32_t)-1));*/
+            s->addr_dst_match4->ip2;
+
+	SCLogDebug(" IP4 - src %x src2 %x dst %x dst2 %x\n", srcIp, srcIpMask, dstIp, dstIpMask);
 
         ret = addDpdkAcl4Rule(srcIp, srcIpMask, dstIp, dstIpMask);
         if (ret != 0) {
@@ -537,13 +541,17 @@ void dpdkRuleAnalysis(Signature *s)
 	srcIp[3] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[3];
 
         srcIpMask[0] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[0] - s->addr_src_match6->ip[0]) & ((uint32_t)-1));
+            /*(~(s->addr_src_match6->ip2[0] - s->addr_src_match6->ip[0]) & ((uint32_t)-1));*/
+            s->addr_src_match6->ip2[0];
         srcIpMask[1] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[1] - s->addr_src_match6->ip[1]) & ((uint32_t)-1));
+            /*(~(s->addr_src_match6->ip2[1] - s->addr_src_match6->ip[1]) & ((uint32_t)-1));*/
+            s->addr_src_match6->ip2[1];
         srcIpMask[2] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[2] - s->addr_src_match6->ip[2]) & ((uint32_t)-1));
+            /*(~(s->addr_src_match6->ip2[2] - s->addr_src_match6->ip[2]) & ((uint32_t)-1));*/
+            s->addr_src_match6->ip2[2];
         srcIpMask[3] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[3] - s->addr_src_match6->ip[3]) & ((uint32_t)-1));
+            /*(~(s->addr_src_match6->ip2[3] - s->addr_src_match6->ip[3]) & ((uint32_t)-1));*/
+            s->addr_src_match6->ip2[3];
 
 	uint32_t dstIp[4] = {0, 0, 0, 0};
 	uint32_t dstIpMask[4] = {0, 0, 0, 0};
@@ -554,13 +562,24 @@ void dpdkRuleAnalysis(Signature *s)
         dstIp[3] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[3];
 
         dstIpMask[0] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[0] - s->addr_dst_match6->ip[0]) & ((uint32_t)-1));
+            /*(~(s->addr_dst_match6->ip2[0] - s->addr_dst_match6->ip[0]) & ((uint32_t)-1));*/
+            s->addr_dst_match6->ip2[0];
         dstIpMask[1] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[1] - s->addr_dst_match6->ip[1]) & ((uint32_t)-1));
+            /*(~(s->addr_dst_match6->ip2[1] - s->addr_dst_match6->ip[1]) & ((uint32_t)-1));*/
+            s->addr_dst_match6->ip2[1];
         dstIpMask[2] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[2] - s->addr_dst_match6->ip[2]) & ((uint32_t)-1));
+            /*(~(s->addr_dst_match6->ip2[2] - s->addr_dst_match6->ip[2]) & ((uint32_t)-1));*/
+            s->addr_dst_match6->ip2[2];
         dstIpMask[3] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[3] - s->addr_dst_match6->ip[3]) & ((uint32_t)-1));
+            /*(~(s->addr_dst_match6->ip2[3] - s->addr_dst_match6->ip[3]) & ((uint32_t)-1));*/
+            s->addr_dst_match6->ip2[3];
+
+	SCLogDebug(" IP6 - src %x:%x:%x:%x src2 %x:%x:%x:%x \
+            dst %x:%x:%x:%x dst2 %x:%x:%x:%x\n", \
+            srcIp[0], srcIp[1], srcIp[2], srcIp[3],
+            srcIpMask[0], srcIpMask[1], srcIpMask[2], srcIpMask[3],
+            dstIp[0], dstIp[1], dstIp[2], dstIp[3],
+            dstIpMask[0], dstIpMask[1], dstIpMask[2], dstIpMask[3]);
 
         ret = addDpdkAcl6Rule(srcIp, srcIpMask, dstIp, dstIpMask);
         if (ret != 0) {
