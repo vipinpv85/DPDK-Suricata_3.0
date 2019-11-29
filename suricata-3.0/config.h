@@ -8,7 +8,7 @@
 #define CLS 64
 
 /* Our CONFIG_DIR */
-#define CONFIG_DIR "/home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/"
+#define CONFIG_DIR "/home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/"
 
 /* Enable debug output */
 /* #undef DEBUG */

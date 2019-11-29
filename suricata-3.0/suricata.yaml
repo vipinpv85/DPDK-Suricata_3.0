@@ -439,15 +439,15 @@ dpdkintel:
 
   inputs:
   - interface: 0
-    copy-interface: 1 
+    copy-interface: 1
     #for ids you can ignore copy-interface
-#  - interface: 1
-#    copy-interface: 0
+  - interface: 1
+    copy-interface: 0
     #for ids you can ignore copy-interface
 
   # Select dpdk intel operation mode ips|ids|bypass
-  #opmode: ips
-  opmode: ids
+  opmode: ips
+  #opmode: ids
 
 # af-packet support
 # Set threads to > 1 to use PACKET_FANOUT support
@@ -584,7 +584,7 @@ legacy:
 
 # You can specify a threshold config file by setting "threshold-file"
 # to the path of the threshold config file:
-threshold-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/threshold.config
+# threshold-file: /etc/suricata/threshold.config
 
 # The detection engine builds internal groups of signatures. The engine
 # allow us to specify the profile to use for them, to manage memory on an
@@ -1137,7 +1137,7 @@ ipfw:
 
 # Set the default rule path here to search for the files.
 # if not set, it will look at the current working dir
-default-rule-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/rules
+default-rule-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/rules
 rule-files:
  - botcc.rules
  - ciarmy.rules
@@ -1190,8 +1190,8 @@ rule-files:
 # - modbus-events.rules  # available in suricata sources under rules dir
  - app-layer-events.rules  # available in suricata sources under rules dir
 
-classification-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/classification.config
-reference-config-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/reference.config
+classification-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/classification.config
+reference-config-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/reference.config
 
 # Holds variables that would be used by the engine.
 vars:
@@ -1253,8 +1253,8 @@ vars:
 #   - alert
 
 # IP Reputation
-#reputation-categories-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/iprep/categories.txt
-#default-reputation-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/suricata/iprep
+#reputation-categories-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/iprep/categories.txt
+#default-reputation-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/iprep
 #reputation-files:
 # - reputation.list
 
