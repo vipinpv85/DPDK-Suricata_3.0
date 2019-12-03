@@ -170,6 +170,8 @@ FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
             if (likely(retAcl == 0)) {
                 *res = acl_res;
                 dpdkStats [inPort].ipv4_pkt_success++;
+                dpdkStats [inPort].ipv4_pkt_aclhit += acl_res ? 1 : 0;
+                dpdkStats [inPort].ipv4_pkt_aclmiss += acl_res ? 0 : 1;
             } else {
                 dpdkStats [inPort].ipv4_pkt_fail++;
             }
@@ -246,64 +248,33 @@ static inline void DpdkIntelDumpCounters(DpdkIntelThreadVars_t *ptv)
 
     SCLogNotice(" --- thread stats for Intf: %u to %u --- ", inPort, outPort);
     SCLogNotice(" +++ ACL pkts +++");
-    SCLogNotice(" -- unexpected %"PRIu64,
-                dpdkStats[inPort].unsupported_pkt);
-    SCLogNotice(" -- ipv4 %"PRIu64, 
-                dpdkStats[inPort].ipv4_pkt);
+    SCLogNotice(" - unexpected %"PRIu64, dpdkStats[inPort].unsupported_pkt);
+
+    SCLogNotice(" +++ ipv4 %"PRIu64" +++", dpdkStats[inPort].ipv4_pkt);
     SCLogNotice(" - acl: ipv4 success %"PRIu64", fail %"PRIu64,
         dpdkStats[inPort].ipv4_pkt_success,
         dpdkStats[inPort].ipv4_pkt_fail);
-    SCLogNotice(" --- ipv6 %"PRIu64,
-                dpdkStats[inPort].ipv6_pkt);
+
+    SCLogNotice(" +++ ipv6 %"PRIu64" +++", dpdkStats[inPort].ipv6_pkt);
     SCLogNotice(" - acl: ipv6 success %"PRIu64", fail %"PRIu64,
         dpdkStats[inPort].ipv6_pkt_success,
         dpdkStats[inPort].ipv6_pkt_fail);
 
     SCLogNotice(" +++ ring +++");
-    SCLogNotice(" -- full %"PRIu64,
-                dpdkStats[inPort].ring_full);
-    SCLogNotice(" -- enq err %"PRIu64,
-                dpdkStats[inPort].enq_err);
-    SCLogNotice(" --  tx err %"PRIu64,
-                dpdkStats[outPort].tx_err);
+    SCLogNotice(" - full %"PRIu64, dpdkStats[inPort].ring_full);
+    SCLogNotice(" - enq err %"PRIu64, dpdkStats[inPort].enq_err);
+    SCLogNotice(" -  tx err %"PRIu64, dpdkStats[outPort].tx_err);
 
+    SCLogNotice(" +++ port %d +++", inPort);
     if (0 == rte_eth_stats_get(inPort, &instats)){
-        SCLogNotice(" + in-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64, 
+        SCLogNotice(" - in-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64, 
             inPort, instats.ipackets, instats.opackets, instats.imissed);
-        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
+        SCLogNotice(" - Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
             instats.ierrors, instats.oerrors, instats.rx_nombuf);
-        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, instats.q_errors[0]);
+        SCLogNotice(" - Queue Dropped pkts: %"PRIu64, instats.q_errors[0]);
     }
 
-
-#if 0
-    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                dpdkStats[inPort].sc_pkt_null,
-                dpdkStats[inPort].sc_fail);
-    SCLogNotice(" --- DPDK stats for port %u ---", outPort);
-    SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                dpdkStats[outPort].unsupported_pkt,
-                dpdkStats[outPort].ipv4_pkt,
-                dpdkStats[outPort].ipv6_pkt);
-    SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                dpdkStats[outPort].ring_full,
-                dpdkStats[outPort].enq_err,
-                dpdkStats[inPort].tx_err);
-    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                dpdkStats[outPort].sc_pkt_null,
-                dpdkStats[outPort].sc_fail);
-       
-    if (0 == rte_eth_stats_get(outPort, &outstats)) {
-        SCLogNotice(" - out-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-            outPort, outstats.ipackets, outstats.opackets, outstats.imissed);
-        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
-            outstats.ierrors, outstats.oerrors, outstats.rx_nombuf);
-        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, outstats.q_errors[0]);
-    }
-#endif
-
-#ifdef PACKET_STATISTICS
-#endif
+    SCLogNotice("----------------------------------");
     return;
 }
 
