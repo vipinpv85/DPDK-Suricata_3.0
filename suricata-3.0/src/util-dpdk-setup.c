@@ -419,7 +419,7 @@ void dpdkAclConfSetup(void)
     acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip4_defs));
     acl_param.name = "suricata-ipv4";
     ctx = rte_acl_create(&acl_param);
-    if (ctx == NULL) {
+    if ((ctx == NULL) || (rte_acl_set_ctx_classify(ctx, RTE_ACL_CLASSIFY_SSE))) {
         SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv4 fail!!!");
         exit(EXIT_FAILURE);
     }
@@ -430,7 +430,7 @@ void dpdkAclConfSetup(void)
     acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip6_defs));
     acl_param.name = "suricata-ipv6";
     ctx = rte_acl_create(&acl_param);
-    if (ctx == NULL) {
+    if ((ctx == NULL) || (rte_acl_set_ctx_classify(ctx, RTE_ACL_CLASSIFY_SSE))){
         SCLogError(SC_ERR_MISSING_CONFIG_PARAM, "acl ipv6 fail!!!");
         exit(EXIT_FAILURE);
     }
@@ -443,25 +443,29 @@ int32_t addDpdkAcl4Rule(uint32_t srcIp, uint32_t srcIpMask, uint32_t dstIp, uint
 {
     int ret = 0;
 
-    struct rte_acl_rule *rules = (struct rte_acl_rule *) &testv4;
     memset(&testv4, 0, sizeof(testv4));
 
     testv4.data.category_mask = -1;
-    testv4.data.priority = 0xff;
-    testv4.data.userdata = 0xdead;
+    testv4.data.priority = file_config.acl.ipv4AclCount + 1;
+    testv4.data.userdata = 0x1;
 
     testv4.field[PROTO_FIELD_IPV4].value.u8 = proto;
     testv4.field[PROTO_FIELD_IPV4].mask_range.u8 = 0xff;
-    testv4.field[DST_FIELD_IPV4].value.u32 = dstIp;
-    testv4.field[DST_FIELD_IPV4].mask_range.u32 = dstIpMask;
-    testv4.field[SRC_FIELD_IPV4].value.u32 = srcIp;
-    testv4.field[SRC_FIELD_IPV4].mask_range.u32 = srcIpMask;
+    testv4.field[DST_FIELD_IPV4].value.u32 = (dstIp);
+    testv4.field[DST_FIELD_IPV4].mask_range.u32 = (dstIpMask);
+    testv4.field[SRC_FIELD_IPV4].value.u32 = (srcIp);
+    testv4.field[SRC_FIELD_IPV4].mask_range.u32 = (srcIpMask);
 
-    //rte_acl_dump(file_config.acl.ipv4AclCtx);
-    ret = rte_acl_add_rules(file_config.acl.ipv4AclCtx, (const struct rte_acl_rule *) rules, 1);
-    if (ret != 0) {
-       rte_acl_dump(file_config.acl.ipv4AclCtx);
-       SCLogNotice("ACL ipv4 add failed %d, but added %u", ret, file_config.acl.ipv4AclCount);
+    SCLogDebug(" - Proto 0x%x Mask 0xFF, SRC IP %x Mask %x, DST IP %x Mask %x",
+        proto, srcIp, srcIpMask, dstIp, dstIpMask);
+
+    //rte_hexdump(stdout, "ipv4 acl: ", (const void *) &testv4, sizeof(testv4));
+    ret = rte_acl_add_rules(file_config.acl.ipv4AclCtx, (const struct rte_acl_rule *) &testv4, 1);
+    if (unlikely(ret != 0)) {
+       SCLogNotice(" ACL ipv4 add fail %d", ret);
+       SCLogNotice(" - Proto 0x%x Mask 0xFF", proto);
+       SCLogNotice(" - SRC IP %x Mask %x", srcIp, srcIpMask);
+       SCLogNotice(" - DST IP %x Mask %x", dstIp, dstIpMask);
     } else
         file_config.acl.ipv4AclCount += 1;
 
@@ -472,41 +476,49 @@ int32_t addDpdkAcl6Rule(uint32_t srcIp[4], uint32_t srcIpMask[4], uint32_t dstIp
 {
     int ret = 0;
 
-    struct rte_acl_rule *rules = (struct rte_acl_rule *) &testv6;
     memset(&testv6, 0, sizeof(testv6));
 
     testv6.data.category_mask = -1;
-    testv6.data.priority = 0xff;
-    testv6.data.userdata = 0xdead;
+    testv6.data.priority = file_config.acl.ipv6AclCount + 1;
+    testv6.data.userdata = 0x1;
 
     testv6.field[IP6_PROTO].value.u8 = proto;
     testv6.field[IP6_PROTO].mask_range.u8 = 0xff;
+
     testv6.field[IP6_DST0].value.u32 = dstIp[0];
-    testv6.field[IP6_DST0].mask_range.u32 = dstIpMask[0];
     testv6.field[IP6_DST1].value.u32 = dstIp[1];
-    testv6.field[IP6_DST1].mask_range.u32 = dstIpMask[1];
     testv6.field[IP6_DST2].value.u32 = dstIp[2];
-    testv6.field[IP6_DST2].mask_range.u32 = dstIpMask[2];
     testv6.field[IP6_DST3].value.u32 = dstIp[3];
+    testv6.field[IP6_DST0].mask_range.u32 = dstIpMask[0];
+    testv6.field[IP6_DST1].mask_range.u32 = dstIpMask[1];
+    testv6.field[IP6_DST2].mask_range.u32 = dstIpMask[2];
     testv6.field[IP6_DST3].mask_range.u32 = dstIpMask[3];
+
     testv6.field[IP6_SRC0].value.u32 = srcIp[0];
-    testv6.field[IP6_SRC0].mask_range.u32 = srcIpMask[0];
     testv6.field[IP6_SRC1].value.u32 = srcIp[1];
-    testv6.field[IP6_SRC1].mask_range.u32 = srcIpMask[1];
     testv6.field[IP6_SRC2].value.u32 = srcIp[2];
-    testv6.field[IP6_SRC2].mask_range.u32 = srcIpMask[2];
     testv6.field[IP6_SRC3].value.u32 = srcIp[3];
+    testv6.field[IP6_SRC0].mask_range.u32 = srcIpMask[0];
+    testv6.field[IP6_SRC1].mask_range.u32 = srcIpMask[1];
+    testv6.field[IP6_SRC2].mask_range.u32 = srcIpMask[2];
     testv6.field[IP6_SRC3].mask_range.u32 = srcIpMask[3];
 
-    //rte_acl_dump(file_config.acl.ipv4AclCtx);
-    ret = rte_acl_add_rules(file_config.acl.ipv6AclCtx, (const struct rte_acl_rule *) rules, 1);
-    if (ret != 0) {
+    //rte_hexdump(stdout, "ipv6 acl: ", (const void *) &testv6, sizeof(testv6));
+    ret = rte_acl_add_rules(file_config.acl.ipv6AclCtx, (const struct rte_acl_rule *) &testv6, 1);
+    if (unlikely(ret != 0)) {
        rte_acl_dump(file_config.acl.ipv6AclCtx);
-       SCLogNotice("ACL ipv6 add failed %d, but added %u", ret, file_config.acl.ipv6AclCount);
+       SCLogNotice(" ACL ipv6 add fail %d", ret);
+       SCLogNotice(" - Proto 0x%x Mask 0xFF", proto);
+       SCLogNotice(" - SRC IP %x:%x:%x:%x Mask %x:%x:%x:%x",
+           srcIp[0], srcIp[1], srcIp[2], srcIp[3],
+           srcIpMask[0], srcIpMask[1], srcIpMask[2], srcIpMask[3]);
+       SCLogNotice(" - DST IP %x:%x:%x:%x Mask %x:%x:%x:%x",
+           dstIp[0], dstIp[1], dstIp[2], dstIp[3],
+           dstIpMask[0], dstIpMask[1], dstIpMask[2], dstIpMask[3]);
     } else
         file_config.acl.ipv6AclCount += 1;
 
-    return 0;
+    return ret;
 }
 
 int32_t addDpdkAcl4Build(void)
@@ -520,9 +532,9 @@ int32_t addDpdkAcl4Build(void)
 
     ret = rte_acl_build(file_config.acl.ipv4AclCtx, &acl_build_param);
     if (ret) {
-        rte_acl_dump(file_config.acl.ipv4AclCtx);
         SCLogNotice("ACL ipv4 build failed %d", ret);
     }
+    rte_acl_dump(file_config.acl.ipv4AclCtx);
 
     return ret;
 }
@@ -538,9 +550,9 @@ int32_t addDpdkAcl6Build(void)
 
     ret = rte_acl_build(file_config.acl.ipv6AclCtx, &acl_build_param);
     if (ret) {
-        rte_acl_dump(file_config.acl.ipv4AclCtx);
         SCLogNotice("ACL ipv6 build failed %d", ret);
     }
+    rte_acl_dump(file_config.acl.ipv6AclCtx);
 
     return ret;
 }
@@ -579,6 +591,7 @@ void dumpMatchPattern(void)
     SCLogNotice(" * tcp:   %"PRId64" ",stats_matchPattern.tcp);
     SCLogNotice(" * udp:   %"PRId64" ",stats_matchPattern.udp);
     SCLogNotice(" * sctp:  %"PRId64" ",stats_matchPattern.sctp);
+    SCLogNotice(" * icmpv4:%"PRId64" ",stats_matchPattern.icmpv4);
     SCLogNotice(" * icmpv6:%"PRId64" ",stats_matchPattern.icmpv6);
     SCLogNotice(" * gre:   %"PRId64" ",stats_matchPattern.gre);
     SCLogNotice(" * raw:   %"PRId64" ",stats_matchPattern.raw);
@@ -588,12 +601,12 @@ void dumpMatchPattern(void)
 
     if (rte_acl_find_existing("suricata-ipv4")) {
         SCLogNotice("----- ACL IPV4 DUMP (%u) ----", file_config.acl.ipv4AclCount);
-        rte_acl_dump(file_config.acl.ipv4AclCtx);
+        //rte_acl_dump(file_config.acl.ipv4AclCtx);
     }
 
     if (rte_acl_find_existing("suricata-ipv6")) {
         SCLogNotice("----- ACL IPV6 DUMP (%u) ----", file_config.acl.ipv6AclCount);
-        rte_acl_dump(file_config.acl.ipv6AclCtx);
+        //rte_acl_dump(file_config.acl.ipv6AclCtx);
     }
 
     return;

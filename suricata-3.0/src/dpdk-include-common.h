@@ -50,6 +50,7 @@
 #include <rte_version.h>
 #include <rte_tailq.h>
 #include <rte_cfgfile.h>
+#include <rte_hexdump.h>
 
 //#include "util-dpdk-config.h"
 #include "util-dpdk-common.h"
@@ -66,8 +67,10 @@ enum {
     PROTO_FIELD_IPV4,
     SRC_FIELD_IPV4,
     DST_FIELD_IPV4,
+#if 0
     SRCP_FIELD_IPV4,
     DSTP_FIELD_IPV4,
+#endif
     NUM_FIELDS_IPV4
 };
 
@@ -100,41 +103,45 @@ dport 13
  */
 
 static struct rte_acl_field_def ip4_defs[NUM_FIELDS_IPV4] = {
-    {
+    [0] = {
     .type = RTE_ACL_FIELD_TYPE_BITMASK,
     .size = sizeof(uint8_t),
     .field_index = PROTO_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_PROTO,
     .offset = 0,
     },
-    {
+    [1] = {
     .type = RTE_ACL_FIELD_TYPE_RANGE/*RTE_ACL_FIELD_TYPE_MASK*/,
     .size = sizeof(uint32_t),
     .field_index = SRC_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_SRC,
+    //.offset = offsetof(struct ipv4_hdr, src_addr) - offsetof(struct ipv4_hdr, next_proto_id),
     .offset = 3,
     },
-    {
+    [2] = {
     .type = RTE_ACL_FIELD_TYPE_RANGE/*RTE_ACL_FIELD_TYPE_MASK*/,
     .size = sizeof(uint32_t),
     .field_index = DST_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_DST,
-    .offset = 7,
+    //.offset = offsetof(struct ipv4_hdr, dst_addr) - offsetof(struct ipv4_hdr, next_proto_id),
+    .offset = 8,
     },
-    {
+#if 0
+    [3] = {
     .type = RTE_ACL_FIELD_TYPE_RANGE,
     .size = sizeof(uint16_t),
     .field_index = SRCP_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_PORTS,
-    .offset =  11,
+    .offset = 12,
     },
-    {
+    [4] ={
     .type = RTE_ACL_FIELD_TYPE_RANGE,
     .size = sizeof(uint16_t),
     .field_index = DSTP_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_PORTS,
-    .offset =  13,
+    .offset =  14,
     },
+#endif
 };
 
 enum {
@@ -147,8 +154,10 @@ enum {
     IP6_DST1,
     IP6_DST2,
     IP6_DST3,
+#if 0
     IP6_SRCP,
     IP6_DSTP,
+#endif
     IP6_NUM
 };
 #define IP6_ADDR_SIZE 16
@@ -216,6 +225,7 @@ static struct rte_acl_field_def ip6_defs[IP6_NUM] = {
     .input_index = IP6_DST3,
     .offset = 30,
     },
+#if 0
     {
     .type = RTE_ACL_FIELD_TYPE_RANGE,
     .size = sizeof(uint16_t),
@@ -230,6 +240,7 @@ static struct rte_acl_field_def ip6_defs[IP6_NUM] = {
     .input_index = IP6_SRCP,
     .offset = 36,
     }
+#endif
 };
 
 RTE_ACL_RULE_DEF(acl4_rule, RTE_DIM(ip4_defs));
