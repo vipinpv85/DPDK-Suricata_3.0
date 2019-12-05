@@ -39,7 +39,7 @@ struct acl4_rule testv4;
 struct acl6_rule testv6;
 
 uint16_t argument_count = 1;
-char argument[EAL_ARGS][EAL_ARGS] = {{"suricata"}, {""}};
+char argument[EAL_ARGS][EAL_ARGS * 3] = {{"suricata"}, {""}};
 
 /* STATIC */
 static const struct rte_eth_conf portConf = {
@@ -328,9 +328,9 @@ void *ParseDpdkConf(void)
 		if (rte_cfgfile_section_entries(file, "EAL", entries, n_entries) != -1) {
 
 			for (int i = 0; i < n_entries; i++) {
-				SCLogDebug(" - name: (%s) value: (%s)", entries[i].name, entries[i].value);
-				snprintf(argument[i * 2 + 1], 32, "%s", entries[i].name);
-				snprintf(argument[i * 2 + 2], 32, "%s", entries[i].value);
+				SCLogNotice(" - name: (%s) value: (%s)", entries[i].name, entries[i].value);
+				snprintf(argument[i * 2 + 1], EAL_ARGS, "%s", entries[i].name);
+				snprintf(argument[i * 2 + 2], EAL_ARGS * 3, "%s", entries[i].value);
 				SCLogDebug(" - argument: (%s) (%s)", argument[i * 2 + 1], argument[i * 2 + 2]);
 			        argument_count += (((entries[i].name) ? 1 : 0) + ((entries[i].value) ? 1 : 0));
 			}
