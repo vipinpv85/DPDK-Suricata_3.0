@@ -6,10 +6,18 @@ integerate DPDK Poll Mode Driver with pre-parser for rules as ACL to suricata wo
 
 ## How to build
 
+## Build Enviroment
+| software | release |
+| -- | -- |
+| gcc | Ubuntu 7.3.0-27ubuntu1~18.04 |
+| OS | 4.15.0-46-generic debian version Ubuntu 18.04.2 LTS |
+
 ### DPDK
 
- 1. Download DPDK LTS **https://fast.dpdk.org/rel/dpdk-17.11.3.tar.xz** from dpdk.org.
+ 1. Download DPDK LTS **http://fast.dpdk.org/rel/dpdk-18.11.5.tar.xz** from dpdk.org.
+
  2. Untar DPDK and use **make config T=x86_64-native-linuxapp-gcc O=x86_64-native-linuxapp-gcc**.
+
  3. Build DPDK by 
  ```
  export RTE_SDK=$PWD; 
@@ -17,6 +25,7 @@ integerate DPDK Poll Mode Driver with pre-parser for rules as ACL to suricata wo
  cd x86_64-native-linuxapp-gcc, 
  make -j 4
  ```
+
  4. Test the custom build by cross checking examples like **helloworld & l2fwd**.
 
 ### Suricata with DPDK
@@ -43,28 +52,31 @@ integerate DPDK Poll Mode Driver with pre-parser for rules as ACL to suricata wo
  - ./configure --sysconfdir=<mydesiredpath> --enable-dpdkintel --with-libdpdkintel-includes=<path to dpdk include> --with-libdpdkintel-libraries=<path to dpdk lib>
 ```
 
- 5. Build suricata-dpdk with
- ```make -j 10```
+ 5. Build suricata with
+```
+make -j 10
+```
 
-## Build Enviroment
+### modified suricata:
 
- - gcc: Ubuntu 7.3.0-27ubuntu1~18.04
- - OS: 4.15.0-46-generic
- - debian version: Ubuntu 18.04.2 LTS
-
+| steps | explanation |
+| -----|-----|
+| `autoconf` | to build the configure script with DPDK support |
+| `./configure --enable-dpdk` | makes configuration and build Makefile with DPDK support |
+| `make -j 10` | build suricata with 10 threads |
 
 ## Test Run: 
 
-```
- - ./src/suricata --list-runmodes
- - ./src/suricata --list-dpdkintel-ports
- - ./src/suricata -c suricata.yaml -s <myrules.rules or user desired rules> --dpdkintel
- ```
+| command | purpose |
+| -----|-----|
+| ./src/suricata --list-runmodes | get suricata version and supported modes |
+| ./src/suricata --list-dpdkintel-ports | list DPDK available ports |
+| ./src/suricata -c suricata.yaml --dpdkintel | Run DPDK suircata with mysuricata.cfg|
  
- ## Configuration
+
+## Configuration
  
  1. IDS
- 
  ```
  #dpdkintel support
 dpdkintel:
@@ -78,7 +90,6 @@ dpdkintel:
  ```
 
 2. IPS
-
 
  ```
  #dpdkintel support
