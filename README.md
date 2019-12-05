@@ -2,7 +2,7 @@
 
 ![dpdk-suricata](https://user-images.githubusercontent.com/1296097/62437531-3aef9000-b761-11e9-8c51-803cd9dddcc8.png)
 
-integerate DPDK Poll Mode Driver with pre-parser for rules as ACL to suricata worker mode.
+Make use of DPD PMD, with pre-parser and 3 Tuple ACL before Suricata worker stage.
 
 ## How to build
 
