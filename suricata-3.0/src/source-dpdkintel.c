@@ -78,8 +78,6 @@ static uint32_t  portConfigured = 0;
 dpdkFrameStats_t dpdkStats [16];
 DpdkCoreConfig_t coreConfig;
 
-struct rte_mbuf *rbQueue[8][1024];
-
 extern struct   rte_ring *srb [16];
 extern file_config_t file_config;
 extern uint64_t coreSet;
@@ -146,30 +144,49 @@ void TmModuleDecodeDpdkRegister (void) {
 static inline void
 FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
 {
-    struct ether_hdr *eth_hdr;
-    uint32_t acl_res = 0;
-    int retAcl;
-    const uint8_t *data;
+    const uint8_t *data = NULL;
+    const uint32_t temp = *res;
 
-    *res = 0;
-
-    eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
+    struct ether_hdr *eth_hdr = rte_pktmbuf_mtod(m, struct ether_hdr *);
+    SCLogDebug(" ether_type  %x", eth_hdr->ether_type);
     if ((eth_hdr->ether_type != 0xDD86) && (eth_hdr->ether_type != 0x0008)) {
+        SCLogDebug(" ether_type is non-IP %x", eth_hdr->ether_type);
         dpdkStats [inPort].unsupported_pkt++; 
         return;
     }
 
-    if (eth_hdr->ether_type == 0x0008)
-        dpdkStats [inPort].ipv4_pkt++;
-    else
-        dpdkStats [inPort].ipv6_pkt++; 
+    SCLogDebug(" pre acl lookup result %x", *res);
+    if (eth_hdr->ether_type == 0x0008) {
+        if (likely(file_config.acl.ipv4AclCount)) {
+            dpdkStats [inPort].ipv4_pkt++;
+            data = MBUF_IPV4_2PROTO(m);
+            //rte_hexdump(stdout, "ipv4 data: ", (const void *) data, 12);
+            if (likely(rte_acl_classify_alg(file_config.acl.ipv4AclCtx,
+                &data, res, 1, 1, RTE_ACL_CLASSIFY_SSE) == 0)) {
+                dpdkStats [inPort].ipv4_pkt_success++;
+                (*res == 0) ? dpdkStats [inPort].ipv4_pkt_aclmiss++ : dpdkStats [inPort].ipv4_pkt_aclhit++;
 
-    data = (eth_hdr->ether_type == 0x0008) ? MBUF_IPV4_2PROTO(m) : MBUF_IPV6_2PROTO(m); /* pointer to key for lookup */
-    retAcl = rte_acl_classify(
-                 (eth_hdr->ether_type == 0x0008) ? file_config.acl.ipv4AclCtx : file_config.acl.ipv6AclCtx,
-                 &data, &acl_res, 1, 1); 
-    if (likely(retAcl == 0))
-        *res = acl_res;
+                SCLogDebug(" post ipv4 acl result %x", *res);
+            } else {
+                dpdkStats [inPort].ipv4_pkt_fail++;
+            }
+        }
+    } else {
+        if (file_config.acl.ipv6AclCount) {
+            dpdkStats [inPort].ipv6_pkt++; 
+            data = MBUF_IPV6_2PROTO(m);
+            //rte_hexdump(stdout, "ipv6 data: ", (const void *) data, 48);
+            if (likely(rte_acl_classify_alg(file_config.acl.ipv6AclCtx,
+                &data, res, 1, 1, RTE_ACL_CLASSIFY_SSE) == 0)) {
+                dpdkStats [inPort].ipv6_pkt_success++; 
+                (*res == 0) ? dpdkStats [inPort].ipv6_pkt_aclmiss++ : dpdkStats [inPort].ipv6_pkt_aclhit++;
+
+                SCLogDebug(" ipv6 acl result %x", *res);
+            } else {
+                dpdkStats [inPort].ipv6_pkt_fail++; 
+            }
+        }
+    }
 }
 
 void DpdkIntelReleasePacket(Packet *p)
@@ -225,59 +242,41 @@ static inline void DpdkIntelDumpCounters(DpdkIntelThreadVars_t *ptv)
     SCLogDebug(" Interface to Dump Stats & Err is %u", ptv->inIfaceId);
 
     SCLogNotice(" --- thread stats for Intf: %u to %u --- ", inPort, outPort);
-    SCLogNotice(" +++ ACL pkts +++");
-    SCLogNotice(" -- unexpected %"PRIu64,
-                dpdkStats[inPort].unsupported_pkt);
-    SCLogNotice(" -- ipv4 %"PRIu64, 
-                dpdkStats[inPort].ipv4_pkt);
-    SCLogNotice(" --- ipv6 %"PRIu64,
-                dpdkStats[inPort].ipv6_pkt);
+    SCLogNotice(" +++ ACL +++");
+    SCLogNotice(" - non IP %"PRIu64, dpdkStats[inPort].unsupported_pkt);
+
+    SCLogNotice(" +++ ipv4 %"PRIu64" +++", dpdkStats[inPort].ipv4_pkt);
+    SCLogNotice(" - lookup: success %"PRIu64", fail %"PRIu64,
+        dpdkStats[inPort].ipv4_pkt_success,
+        dpdkStats[inPort].ipv4_pkt_fail);
+    SCLogNotice(" - result: hit %"PRIu64", miss %"PRIu64,
+        dpdkStats[inPort].ipv4_pkt_aclhit,
+        dpdkStats[inPort].ipv4_pkt_aclmiss);
+
+    SCLogNotice(" +++ ipv6 %"PRIu64" +++", dpdkStats[inPort].ipv6_pkt);
+    SCLogNotice(" - lookup: success %"PRIu64", fail %"PRIu64,
+        dpdkStats[inPort].ipv6_pkt_success,
+        dpdkStats[inPort].ipv6_pkt_fail);
+    SCLogNotice(" - result: hit %"PRIu64", miss %"PRIu64,
+        dpdkStats[inPort].ipv6_pkt_aclhit,
+        dpdkStats[inPort].ipv6_pkt_aclmiss);
 
     SCLogNotice(" +++ ring +++");
-    SCLogNotice(" -- full %"PRIu64,
-                dpdkStats[inPort].ring_full);
-    SCLogNotice(" -- enq err %"PRIu64,
-                dpdkStats[inPort].enq_err);
-    SCLogNotice(" --  tx err %"PRIu64,
-                dpdkStats[outPort].tx_err);
+    SCLogNotice(" ERR: full %"PRIu64", enq %"PRIu64", tx %"PRIu64,
+        dpdkStats[inPort].ring_full,
+        dpdkStats[inPort].enq_err,
+        dpdkStats[outPort].tx_err);
 
+    SCLogNotice(" +++ port %d +++", inPort);
     if (0 == rte_eth_stats_get(inPort, &instats)){
-        SCLogNotice(" + in-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64, 
+        SCLogNotice(" - index %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64, 
             inPort, instats.ipackets, instats.opackets, instats.imissed);
-        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
+        SCLogNotice(" - Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
             instats.ierrors, instats.oerrors, instats.rx_nombuf);
-        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, instats.q_errors[0]);
+        SCLogNotice(" - Queue Dropped pkts: %"PRIu64, instats.q_errors[0]);
     }
 
-
-#if 0
-    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                dpdkStats[inPort].sc_pkt_null,
-                dpdkStats[inPort].sc_fail);
-    SCLogNotice(" --- DPDK stats for port %u ---", outPort);
-    SCLogNotice(" - ACL pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                dpdkStats[outPort].unsupported_pkt,
-                dpdkStats[outPort].ipv4_pkt,
-                dpdkStats[outPort].ipv6_pkt);
-    SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                dpdkStats[outPort].ring_full,
-                dpdkStats[outPort].enq_err,
-                dpdkStats[inPort].tx_err);
-    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                dpdkStats[outPort].sc_pkt_null,
-                dpdkStats[outPort].sc_fail);
-       
-    if (0 == rte_eth_stats_get(outPort, &outstats)) {
-        SCLogNotice(" - out-port %u pkts RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-            outPort, outstats.ipackets, outstats.opackets, outstats.imissed);
-        SCLogNotice(" + Errors RX: %"PRIu64" TX: %"PRIu64" Mbuff: %"PRIu64, 
-            outstats.ierrors, outstats.oerrors, outstats.rx_nombuf);
-        SCLogNotice(" + Queue Dropped pkts: %"PRIu64, outstats.q_errors[0]);
-    }
-#endif
-
-#ifdef PACKET_STATISTICS
-#endif
+    SCLogNotice("----------------------------------");
     return;
 }
 
@@ -312,7 +311,7 @@ static inline Packet *DpdkIntelProcessPacket(DpdkIntelThreadVars_t *ptv, struct 
         return NULL;
     }
 
-    SCLogDebug(" Suricata packet %p for bte %d", p, caplen);
+    SCLogDebug(" Suricata packet %p for byte %d", p, caplen);
 
     PACKET_RECYCLE(p);
     PKT_SET_SRC(p, PKT_SRC_WIRE);
@@ -379,33 +378,35 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 
     SCLogDebug("RX-TX Intf Id in %d out %d\n", ptv->inIfaceId, ptv->outIfaceId);
 
-    if (rte_eth_dev_start(ptv->inIfaceId) < 0) {
-        SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " failed RX-TX start on port %d\n", ptv->inIfaceId);
-        SCReturnInt(TM_ECODE_FAILED);
-    }
-
     while(1) {
         if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             //DpdkIntelDumpCounters(ptv);
+            SCLogDebug(" Received Signal!");
             SCReturnInt(TM_ECODE_OK);
         }
 
+	struct rte_mbuf *rbQueue[1024] = {0};
+
         /* invoke rte_api for getting packets*/
         packet_q_len = rte_ring_dequeue_burst(srb[ptv->ringBuffId], 
-                                              (void *)&rbQueue[ptv->ringBuffId],
+                                              (void *)&rbQueue,
                                               /*64*/128, &avail);
-        SCLogDebug("rte dequeue ringId: %d count: %d", ptv->ringBuffId, packet_q_len);
+
+        SCLogDebug(" dequeue ringId (%d) count (%d) remaining (%d)",
+            ptv->ringBuffId, packet_q_len, avail);
+
         /* ToDo: update counters - phase 2 */
         if (likely(packet_q_len)) {
-            /*SCLogNotice("rte dequeue count: %d", packet_q_len);*/
+            SCLogDebug("rte dequeue count: %d", packet_q_len);
+
             for (j = 0; ((j < PREFETCH_OFFSET) && (j < packet_q_len)); j++) {
-                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j], void *));
+                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[j], void *));
             }
 
             for (j = 0; j < (packet_q_len - PREFETCH_OFFSET); j++) {
-                struct rte_mbuf *tmp = rbQueue[ptv->ringBuffId][j];
+                struct rte_mbuf *tmp = rbQueue[j];
                 /* Prefetch others and process prev prefetched packets */
-                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[ptv->ringBuffId][j + PREFETCH_OFFSET], void *));
+                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[j + PREFETCH_OFFSET], void *));
 
                 SCLogDebug(" User data %"PRIx64, tmp->udata64);
 
@@ -418,8 +419,8 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                     continue;
                 }
 
-                SCLogDebug("Acquired Suricata Pkt %p", p);
-                SCLogDebug(" mbuff %p len %u offset %u ", tmp, tmp->pkt_len, tmp->data_off);
+                SCLogDebug(" Suricata pkt %p mbuff %p len %u offset %u ",
+                    p, tmp, tmp->pkt_len, tmp->data_off);
 
                 SET_PKT_LEN(p, tmp->pkt_len);
 
@@ -445,7 +446,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
             }
 
             for (; j < packet_q_len; j++) {
-                struct rte_mbuf *tmp = rbQueue[ptv->ringBuffId][j];
+                struct rte_mbuf *tmp = rbQueue[j];
 
                 SCLogDebug(" User data %"PRIx64, tmp->udata64);
 
@@ -458,8 +459,8 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                     continue;
                 }
 
-                SCLogDebug("Acquired Suricata Pkt %p", p);
-                SCLogDebug(" mbuff %p len %u offset %u ", tmp, tmp->pkt_len, tmp->data_off);
+                SCLogDebug(" Suricata pkt %p mbuff %p len %u offset %u ",
+                    p, tmp, tmp->pkt_len, tmp->data_off);
 
                 SET_PKT_LEN(p, tmp->pkt_len);
 
@@ -475,6 +476,13 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
     continue;
 #endif
                 SCLogDebug("Invoking thread slot process!!");
+                if (unlikely(TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK)) {
+                   TmqhOutputPacketpool(ptv->tv, p);
+                    /* update counters */
+                    dpdkStats[ptv->inIfaceId].sc_fail++;
+                    rte_pktmbuf_free(tmp);
+                    continue;
+               }
             }
         } /* dequed frames from ring buffer */
     }
@@ -732,7 +740,7 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
     int32_t enq = 0, ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_eth_stats stats;
-    uint32_t acl_res = 0;
+    uint32_t acl_res = 0xffffffff;
 
     uint32_t portBmpMap = *(uint32_t *) arg;
 
@@ -762,27 +770,12 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                 }
                 tmpMap = tmpMap >> 1;
                 index++;
-
-            SCLogNotice(" --- DPDK stats for port %u --- ", inPort);
-            SCLogNotice(" - pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                        dpdkStats[inPort].unsupported_pkt,
-                        dpdkStats[inPort].ipv4_pkt,
-                        dpdkStats[inPort].ipv6_pkt);
-            SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                        dpdkStats[inPort].ring_full,
-                        dpdkStats[inPort].enq_err,
-                        dpdkStats[outPort].tx_err);
-            SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                        dpdkStats[inPort].sc_pkt_null,
-                        dpdkStats[inPort].sc_fail);
-
             }
             break;
         } /* end of suricata_ctl_flags */
 
         while (tmpMap) 
         {
-
             if (tmpMap & 0x01) {
                 uint8_t inPort   = portMap [index].inport;
                 uint8_t outPort  = portMap [index].outport;
@@ -805,75 +798,76 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         }
                         continue;
                     } /* end of totalRules */
+                    else {
+                        RingId = inPort; /* Ring Index same as port Index from DPDK */
 
-                    RingId = inPort; /* Ring Index same as port Index from DPDK */
+                        SCLogDebug(" packets from Inport %d to enqueue %d", RingId, nb_rx);
 
-                    if (unlikely(1 == rte_ring_full(srb [RingId]))) {
-                        dpdkStats [inPort].ring_full++;
-                        for (ret = 0; ret < nb_rx; ret++)
-                            rte_pktmbuf_free(pkts_burst[ret]);
-                        continue;
-                    } /* end of ring full */
+                        if (unlikely(1 == rte_ring_full(srb [RingId]))) {
+                            dpdkStats [inPort].ring_full++;
+                            for (ret = 0; ret < nb_rx; ret++)
+                                rte_pktmbuf_free(pkts_burst[ret]);
+                        } /* end of ring full */
+                        else {
 
-                    for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
-                        rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
-                    }
-
-                    for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {     
-                        struct rte_mbuf *m = pkts_burst[j];
-                        rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
-
-                        SCLogDebug("add frame to RB %u len %d for %p",
-                                     RingId, m->pkt_len, m);
-
-		        /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, inPort);
-                        if (acl_res == 0) {
-                            if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
-                                rte_pktmbuf_free(m);
-                                continue;
+                            for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
+                                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
                             }
-                        }
 
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                        if (unlikely(enq != 1)) {
-                            dpdkStats [inPort].enq_err++;
-                            SCLogDebug(
-                                       " RingEnq %d core :%u full %d",
-                                       enq, rte_lcore_id(),
-                                       rte_ring_full(srb [RingId]));
-                            rte_pktmbuf_free(m);
-                            continue;
-                        }
-                    }
+                            for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {     
+                                struct rte_mbuf *m = pkts_burst[j];
+                                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
 
-                    for (; j < nb_rx; j++) {
-                        struct rte_mbuf *m = pkts_burst[j];
-                        SCLogDebug("add frame to RB %u len %d for %p",
-                                     RingId, m->pkt_len, m);
+                                SCLogDebug("add frame to RB %u len %d for %p",
+                                             RingId, m->pkt_len, m);
 
-		        /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, inPort);
-                        if (acl_res == 0) {
-                            if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
-                                rte_pktmbuf_free(m);
-                                continue;
+		                /* ACL check for rule match */
+                                FilterPackets(m, &acl_res, inPort);
+                                if (!acl_res) {
+                                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                        rte_pktmbuf_free(m);
+                                        continue;
+                                    }
+                                }
+
+                                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                                if (unlikely(enq != 1)) {
+                                    dpdkStats [inPort].enq_err++;
+                                    SCLogDebug(
+                                               " RingEnq %d core :%u full %d",
+                                               enq, rte_lcore_id(),
+                                               rte_ring_full(srb [RingId]));
+                                    rte_pktmbuf_free(m);
+                                }
                             }
-                        }
 
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                        if (unlikely(enq != 1)) {
-                            dpdkStats [inPort].enq_err++;
-                            SCLogDebug(
-                                       " RingEnq %d core :%u full %d",
-                                       enq, rte_lcore_id(),
-                                       rte_ring_full(srb [RingId]));
-                            rte_pktmbuf_free(m);
-                            continue;
+                            for (; j < nb_rx; j++) {
+                                struct rte_mbuf *m = pkts_burst[j];
+                                SCLogDebug("add frame to RB %u len %d for %p",
+                                             RingId, m->pkt_len, m);
+
+		                /* ACL check for rule match */
+                                FilterPackets(m, &acl_res, inPort);
+                                if (!acl_res) {
+                                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                        rte_pktmbuf_free(m);
+                                        continue;
+                                    }
+                                }
+
+                                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                                if (unlikely(enq != 1)) {
+                                    dpdkStats [inPort].enq_err++;
+                                    SCLogDebug(
+                                               " RingEnq %d core :%u full %d",
+                                               enq, rte_lcore_id(),
+                                               rte_ring_full(srb [RingId]));
+                                    rte_pktmbuf_free(m);
+                                }
+                            } /* End of enqueue */
                         }
-                    }
-                    /* End of enqueue */
-                } /* end of 1st intf*/
+                    } /* end of 1st intf*/
+                }
 
                 nb_rx = rte_eth_rx_burst(outPort, 0, pkts_burst, MAX_PKT_BURST);
                 if (likely(nb_rx > 0)) {
@@ -892,76 +886,78 @@ int32_t ReceiveDpdkPkts_IPS_10_100(__attribute__((unused)) void *arg)
                         }
                         continue;
                     } /* end of totalRules */
+                    else {
+                        RingId = outPort; /* Ring Index same as port Index from DPDK */
 
-                    RingId = outPort; /* Ring Index same as port Index from DPDK */
+                        SCLogDebug(" packets from Inport %d to enqueue %d", RingId, nb_rx);
 
-                    if (unlikely(1 == rte_ring_full(srb [RingId]))) {
-                        dpdkStats [outPort].ring_full++;
-                        for (ret = 0; ret < nb_rx; ret++)
-                            rte_pktmbuf_free(pkts_burst[ret]);
-                        continue;
-                    } /* end of ring full */
-
-                    for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
-                        rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
-                    }
-
-                    for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {     
-                        struct rte_mbuf *m = pkts_burst[j];
-                        rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
-
-                        SCLogDebug("add frame to RB %u len %d for %p",
-                                     RingId, m->pkt_len, m);
-
-                        /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, outPort);
-                        if (acl_res == 0) {
-                            if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
-                                rte_pktmbuf_free(m);
-                                continue;
+                        if (unlikely(1 == rte_ring_full(srb [RingId]))) {
+                            dpdkStats [outPort].ring_full++;
+                            for (ret = 0; ret < nb_rx; ret++)
+                                rte_pktmbuf_free(pkts_burst[ret]);
+                        } /* end of ring full */
+                        else {
+                            for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
+                                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
                             }
+
+                            for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {     
+                                struct rte_mbuf *m = pkts_burst[j];
+                                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
+
+                                SCLogDebug("add frame to RB %u len %d for %p",
+                                             RingId, m->pkt_len, m);
+
+                                /* ACL check for rule match */
+                                FilterPackets(m, &acl_res, outPort);
+                                if (!acl_res) {
+                                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                        rte_pktmbuf_free(m);
+                                        continue;
+                                    }
+                                }
+
+                                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                                if (unlikely(enq != 1)) {
+                                    dpdkStats [outPort].enq_err++;
+                                    SCLogDebug(
+                                               " RingEnq %d core :%u full %d",
+                                               enq, rte_lcore_id(),
+                                               rte_ring_full(srb [RingId]));
+                                    rte_pktmbuf_free(m);
+                                    continue;
+                                }
+                            } 
+
+                            for (; j < nb_rx; j++) {
+                                struct rte_mbuf *m = pkts_burst[j];
+
+                                SCLogDebug("add frame to RB %u len %d for %p",
+                                             RingId, m->pkt_len, m);
+
+                                /* ACL check for rule match */
+                                FilterPackets(m, &acl_res, outPort);
+                                if (!acl_res) {
+                                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
+                                        rte_pktmbuf_free(m);
+                                        continue;
+                                    }
+                                }
+
+                                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                                if (unlikely(enq != 1)) {
+                                    dpdkStats [outPort].enq_err++;
+                                    SCLogDebug(
+                                               " RingEnq %d core :%u full %d",
+                                               enq, rte_lcore_id(),
+                                               rte_ring_full(srb [RingId]));
+                                    rte_pktmbuf_free(m);
+                                    continue;
+                                }
+                            } /* End of enqueue */
                         }
-
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                        if (unlikely(enq != 1)) {
-                            dpdkStats [outPort].enq_err++;
-                            SCLogDebug(
-                                       " RingEnq %d core :%u full %d",
-                                       enq, rte_lcore_id(),
-                                       rte_ring_full(srb [RingId]));
-                            rte_pktmbuf_free(m);
-                            continue;
-                        }
-                    } 
-
-                    for (; j < nb_rx; j++) {
-                        struct rte_mbuf *m = pkts_burst[j];
-
-                        SCLogDebug("add frame to RB %u len %d for %p",
-                                     RingId, m->pkt_len, m);
-
-                        /* ACL check for rule match */
-                        FilterPackets(m, &acl_res, outPort);
-                        if (acl_res == 0) {
-                            if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
-                                rte_pktmbuf_free(m);
-                                continue;
-                            }
-                        }
-
-                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                        if (unlikely(enq != 1)) {
-                            dpdkStats [outPort].enq_err++;
-                            SCLogDebug(
-                                       " RingEnq %d core :%u full %d",
-                                       enq, rte_lcore_id(),
-                                       rte_ring_full(srb [RingId]));
-                            rte_pktmbuf_free(m);
-                            continue;
-                        }
-                    }
-                    /* End of enqueue */
-                } /* end of 2nd intf */
+                    } /* end of 2nd intf */
+                }
             }
 
             tmpMap = tmpMap >> 1;
@@ -979,7 +975,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
     int32_t nb_rx = 0;
     int32_t enq = 0, ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-    uint32_t acl_res = 0;
+    uint32_t acl_res = 0xffffffff;
 
     uint16_t inPort    = ((*(uint16_t *) arg) & 0x00FF) >> 0;
     uint16_t outPort   = ((*(uint16_t *) arg) & 0xFF00) >> 8;
@@ -995,7 +991,7 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
 
     while(1)
     {
-        if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             break;
         } /* end of suricata_ctl_flags */
 
@@ -1015,74 +1011,72 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                     for (; ret < nb_rx; ret++)
                         rte_pktmbuf_free(pkts_burst[ret]);
                 }
-                continue;
             } /* end of totalRules */
-
-            if (unlikely(1 == rte_ring_full(srb [RingId]))) {
-                dpdkStats [inPort].ring_full++;
-                for (ret = 0; ret < nb_rx; ret++)
-                    rte_pktmbuf_free(pkts_burst[ret]);
-                continue;
-            } /* end of ring full */
-
-            for (j = 0; ((j < nb_rx) && (j < nb_rx)); j++) {
-		    rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
-            }
-
-            for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
-                struct rte_mbuf *m = pkts_burst[j];
-                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
-
-                SCLogDebug("add frame to RB %u len %d for %p",
-                             RingId, m->pkt_len, m);
-
-		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, inPort);
-                if (acl_res == 0) {
-                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
-                        rte_pktmbuf_free(m);
-                        continue;
+            else {
+                if (unlikely(1 == rte_ring_full(srb [RingId]))) {
+                    dpdkStats [inPort].ring_full++;
+                    for (ret = 0; ret < nb_rx; ret++)
+                        rte_pktmbuf_free(pkts_burst[ret]);
+                } /* end of ring full */
+                else {
+                    for (j = 0; ((j < nb_rx) && (j < nb_rx)); j++) {
+	                    rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
                     }
-                }
 
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                if (unlikely(enq != 1)) {
-                    dpdkStats [inPort].enq_err++;
-                    SCLogDebug(
-                               " RingEnq %d core :%u full %d",
-                               enq, rte_lcore_id(),
-                               rte_ring_full(srb [RingId]));
-                    rte_pktmbuf_free(m);
-                    continue;
-                }
-            }
+                    for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
+                        struct rte_mbuf *m = pkts_burst[j];
+                        rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
 
-            for (; j < nb_rx; j++) {
-                struct rte_mbuf *m = pkts_burst[j];
-                SCLogDebug("add frame to RB %u len %d for %p",
-                             RingId, m->pkt_len, m);
+                        SCLogDebug("add frame to RB %u len %d for %p",
+                                     RingId, m->pkt_len, m);
 
-		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, inPort);
-                if (acl_res == 0) {
-                    if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
-                        rte_pktmbuf_free(m);
-                        continue;
+	                /* ACL check for rule match */
+                        FilterPackets(m, &acl_res, inPort);
+                        if (!acl_res) {
+                            if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
+
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                        if (unlikely(enq != 1)) {
+                            dpdkStats [inPort].enq_err++;
+                            SCLogDebug(
+                                       " RingEnq %d core :%u full %d",
+                                       enq, rte_lcore_id(),
+                                       rte_ring_full(srb [RingId]));
+                            rte_pktmbuf_free(m);
+                        }
                     }
-                }
 
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                if (unlikely(enq != 1)) {
-                    dpdkStats [inPort].enq_err++;
-                    SCLogDebug(
-                               " RingEnq %d core :%u full %d",
-                               enq, rte_lcore_id(),
-                               rte_ring_full(srb [RingId]));
-                    rte_pktmbuf_free(m);
-                    continue;
+                    for (; j < nb_rx; j++) {
+                        struct rte_mbuf *m = pkts_burst[j];
+                        SCLogDebug("add frame to RB %u len %d for %p",
+                                     RingId, m->pkt_len, m);
+
+	                /* ACL check for rule match */
+                        FilterPackets(m, &acl_res, inPort);
+                        if (!acl_res) {
+                            if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
+
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                        if (unlikely(enq != 1)) {
+                            dpdkStats [inPort].enq_err++;
+                            SCLogDebug(
+                                       " RingEnq %d core :%u full %d",
+                                       enq, rte_lcore_id(),
+                                       rte_ring_full(srb [RingId]));
+                            rte_pktmbuf_free(m);
+                        }
+                    }
+                    /* End of enqueue */
                 }
             }
-            /* End of enqueue */
         } /* end of 1st intf*/
 
         RingId = outPort; /* Ring Index same as port Index from DPDK */
@@ -1102,77 +1096,75 @@ int32_t ReceiveDpdkPkts_IPS_1000(__attribute__((unused)) void *arg)
                     for (; ret < nb_rx; ret++)
                         rte_pktmbuf_free(pkts_burst[ret]);
                 }
-                continue;
             } /* end of totalRules */
-
-            if (unlikely(1 == rte_ring_full(srb [RingId]))) {
-                dpdkStats [outPort].ring_full++;
-                for (ret = 0; ret < nb_rx; ret++)
-                    rte_pktmbuf_free(pkts_burst[ret]);
-                continue;
-            } /* end of ring full */
-
-            for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
-                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
-            }
-
-            for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
-                struct rte_mbuf *m = pkts_burst[j];
-                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
-
-                SCLogDebug("add frame to RB %u len %d for %p",
-                             RingId, m->pkt_len, m);
-
-		/* ACL check for rule match */
-		FilterPackets(m, &acl_res, outPort);
-                if (acl_res == 0) {
-                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
-                        rte_pktmbuf_free(m);
-                        continue;
-                    }
-                }
-
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                if (unlikely(enq != 1)) {
-                    dpdkStats [outPort].enq_err++;
-                    SCLogDebug(
-                               " RingEnq %d core :%u full %d",
-                               enq, rte_lcore_id(),
-                               rte_ring_full(srb [RingId]));
-                    rte_pktmbuf_free(m);
+            else {
+                if (unlikely(1 == rte_ring_full(srb [RingId]))) {
+                    dpdkStats [outPort].ring_full++;
+                    for (ret = 0; ret < nb_rx; ret++)
+                        rte_pktmbuf_free(pkts_burst[ret]);
                     continue;
-                }
-            } 
-
-            for (; j < nb_rx; j++) {
-                struct rte_mbuf *m = pkts_burst[j];
-
-                SCLogDebug("add frame to RB %u len %d for %p",
-                             RingId, m->pkt_len, m);
-
-		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, outPort);
-                if (acl_res == 0) {
-                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
-                        rte_pktmbuf_free(m);
-                        continue;
+                } /* end of ring full */
+                else {
+                    for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
+                        rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
                     }
-                }
 
-                enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
-                if (unlikely(enq != 1)) {
-                    dpdkStats [outPort].enq_err++;
-                    SCLogDebug(
-                               " RingEnq %d core :%u full %d",
-                               enq, rte_lcore_id(),
-                               rte_ring_full(srb [RingId]));
-                    rte_pktmbuf_free(m);
-                    continue;
+                    for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
+                        struct rte_mbuf *m = pkts_burst[j];
+                        rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
+
+                        SCLogDebug("add frame to RB %u len %d for %p",
+                                     RingId, m->pkt_len, m);
+
+	        	/* ACL check for rule match */
+	        	FilterPackets(m, &acl_res, outPort);
+                        if (!acl_res) {
+                            if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
+
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                        if (unlikely(enq != 1)) {
+                            dpdkStats [outPort].enq_err++;
+                            SCLogDebug(
+                                       " RingEnq %d core :%u full %d",
+                                       enq, rte_lcore_id(),
+                                       rte_ring_full(srb [RingId]));
+                            rte_pktmbuf_free(m);
+                        }
+                    } 
+
+                    for (; j < nb_rx; j++) {
+                        struct rte_mbuf *m = pkts_burst[j];
+
+                        SCLogDebug("add frame to RB %u len %d for %p",
+                                     RingId, m->pkt_len, m);
+
+	        	/* ACL check for rule match */
+                        FilterPackets(m, &acl_res, outPort);
+                        if (!acl_res) {
+                            if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, nb_rx) == 0) {
+                                rte_pktmbuf_free(m);
+                                continue;
+                            }
+                        }
+
+                        enq = rte_ring_enqueue_burst(srb [RingId], (void *)&m, 1, &freespace);
+                        if (unlikely(enq != 1)) {
+                            dpdkStats [outPort].enq_err++;
+                            SCLogDebug(
+                                       " RingEnq %d core :%u full %d",
+                                       enq, rte_lcore_id(),
+                                       rte_ring_full(srb [RingId]));
+                            rte_pktmbuf_free(m);
+                        }
+                    }
+                    /* End of enqueue */
                 }
             }
-            /* End of enqueue */
         }
-
     } /* end of while */
 
     return 0;
@@ -1185,7 +1177,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
     int32_t enq = 0;
     int32_t ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
-    uint32_t acl_res = 0;
+    uint32_t acl_res = 0xffffffff;
 
     uint16_t inPort  = ((*(uint16_t *) arg) & 0x00FF) >> 0;
     uint16_t outPort = ((*(uint16_t *) arg) & 0xFF00) >> 8;
@@ -1232,6 +1224,8 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 continue;
             } /* end of ring full */
 
+             SCLogDebug(" Ring %d packets to enqueue %d", ringId, nb_rx);
+
             for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
                 rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
             }
@@ -1245,7 +1239,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
 
 		/* ACL check for rule match */
                 FilterPackets(m, &acl_res, inPort);
-                if (acl_res == 0) {
+                if (!acl_res) {
                     if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                        rte_pktmbuf_free(m);
                        continue;
@@ -1272,7 +1266,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
 
 		/* ACL check for rule match */
                 FilterPackets(m, &acl_res, inPort);
-                if (acl_res == 0) {
+                if (!acl_res) {
                     if (rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
                        rte_pktmbuf_free(m);
                        continue;
@@ -1292,95 +1286,6 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
             } 
             /* End of enqueue */
         }
-
-    	ringId  = outPort; /* ringID as same as input port number*/
-        nb_rx = rte_eth_rx_burst(outPort, 0, pkts_burst, MAX_PKT_BURST);
-        if (likely(nb_rx > 0)) {
-            SCLogDebug("Port %u Frames: %u", outPort, nb_rx);
-
-            if (unlikely(stats_matchPattern.totalRules == 0)) {
-                ret = rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
-                if (unlikely ((nb_rx - ret) != 0))
-                {
-                    dpdkStats [inPort].tx_err += (nb_rx - ret);
-
-                    SCLogDebug("Failed to send Packet %d ret : %d",
-                                            inPort, ret);
-
-                    for (; ret < nb_rx; ret++)
-                        rte_pktmbuf_free(pkts_burst[ret]);
-                }
-                continue;
-            } /* end of totalRules */
-
-            if (unlikely(1 == rte_ring_full(srb [ringId]))) {
-                dpdkStats [outPort].ring_full++;
-                for (ret = 0; ret < nb_rx; ret++)
-                    rte_pktmbuf_free(pkts_burst[ret]);
-                continue;
-            } /* end of ring full */
-
-            for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
-                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
-            }
-
-            for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
-                struct rte_mbuf *m = pkts_burst[j];
-                rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
-
-                SCLogDebug("add frame to RB %u len %d for %p",
-                             ringId, m->pkt_len, m);
-
-		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, outPort);
-                if (acl_res == 0) {
-                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
-                       rte_pktmbuf_free(m);
-                       continue;
-                    }
-                }
-
-                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
-                if (unlikely(enq != 1)) {
-                    dpdkStats [outPort].enq_err++;
-                    SCLogDebug(
-                               " RingEnq %d core :%u full %d",
-                               enq, rte_lcore_id(),
-                               rte_ring_full(srb [ringId]));
-                    rte_pktmbuf_free(m);
-                    continue;
-                }
-            } 
-
-            for (; j < nb_rx; j++) {
-                struct rte_mbuf *m = pkts_burst[j];
-
-                SCLogDebug("add frame to RB %u len %d for %p",
-                             ringId, m->pkt_len, m);
-
-		/* ACL check for rule match */
-                FilterPackets(m, &acl_res, outPort);
-                if (acl_res == 0) {
-                    if (rte_eth_tx_burst(inPort, 0, (struct rte_mbuf **)&m, 1) == 0) {
-                       rte_pktmbuf_free(m);
-                       continue;
-                    }
-                }
- 
-                enq = rte_ring_enqueue_burst(srb [ringId], (void *)&m, 1, &freespace);
-                if (unlikely(enq != 1)) {
-                    dpdkStats [outPort].enq_err++;
-                    SCLogDebug(
-                               " RingEnq %d core :%u full %d",
-                               enq, rte_lcore_id(),
-                               rte_ring_full(srb [ringId]));
-                    rte_pktmbuf_free(m);
-                    continue;
-                }
-            } 
-            /* End of enqueue */
-        }
-
     } /* end of while */
 
     return 0;
@@ -1401,7 +1306,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
     int32_t ret = 0, j = 0;
     struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
     struct rte_eth_stats stats;
-    uint32_t acl_res = 0;
+    uint32_t acl_res = 0xffffffff;
 
     SCLogNotice("IDS ports %x, core %u, enble %d, scket %d phy %d", 
             DPDKINTEL_GENCFG.Port/* port count */, rte_lcore_id(),
@@ -1419,27 +1324,6 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
     portIndex = 0;
     while(1) {
         if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL) && portIndex == DPDKINTEL_GENCFG.Port)) {
-            for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
-            {
-                rte_eth_dev_stop(portIndex);
-                if (likely(0 == rte_eth_stats_get(portMap [portIndex].inport, &stats))) {
-                    SCLogNotice("IDS port %u", portMap [portIndex].inport);
-                    SCLogNotice(" - pkts: RX %"PRIu64" TX %"PRIu64" MISS %"PRIu64,
-                            stats.ipackets, stats.opackets, stats.imissed);
-                    SCLogNotice(" - pkts: unexpected %"PRIu64", ipv4 %"PRIu64 ", ipv6 %"PRIu64,
-                                dpdkStats[portMap [portIndex].inport].unsupported_pkt,
-                                dpdkStats[portMap [portIndex].inport].ipv4_pkt,
-                                dpdkStats[portMap [portIndex].inport].ipv6_pkt);
-                    SCLogNotice(" - ring: full %"PRIu64", enq err %"PRIu64", tx err %"PRIu64,
-                                dpdkStats[portMap [portIndex].inport].ring_full,
-                                dpdkStats[portMap [portIndex].inport].enq_err,
-                                dpdkStats[portMap [portIndex].outport].tx_err);
-                    SCLogNotice(" - SC Pkt: fail %"PRIu64", Process Fail %"PRIu64,
-                                dpdkStats[portMap [portIndex].inport].sc_pkt_null,
-                                dpdkStats[portMap [portIndex].inport].sc_fail);
-                }
-            }
-
             SCReturnInt(TM_ECODE_OK);
         }
 
@@ -1472,7 +1356,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 
 		    /* ACL check for rule match */
                     FilterPackets(m, &acl_res, portMap [portIndex].inport);
-                    if (unlikely(acl_res == 0)) {
+                    if (unlikely(!acl_res)) {
                         rte_pktmbuf_free(m);
                         continue;
                     }
@@ -1497,7 +1381,7 @@ int32_t ReceiveDpdkPkts_IDS(__attribute__((unused)) void *arg)
 
 		    /* ACL check for rule match */
                     FilterPackets(m, &acl_res, portMap [portIndex].inport);
-                    if (unlikely(acl_res == 0)) {
+                    if (unlikely(!acl_res)) {
                         rte_pktmbuf_free(m);
                         continue;
                     }
@@ -1534,7 +1418,7 @@ int32_t ReceiveDpdkPkts_BYPASS(__attribute__((unused)) void *arg)
             rte_socket_id());
 
     while (1) {
-        if (suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL)) {
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
             for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++) 
             {
                 if (0 == rte_eth_stats_get(portMap [portIndex].inport, &stats)) {
@@ -1643,6 +1527,11 @@ int32_t launchDpdkFrameParser(void)
         {
             SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "Unknown speed (%u) for %u", linkSpeed.link_speed, reqCores);
         }
+
+	if (rte_eth_dev_start(portMap[portIndex].inport) < 0) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " failed RX-TX start on port %d\n", portMap[portIndex].inport);
+            SCReturnInt(TM_ECODE_FAILED);
+        }
     }
 
     SCLogDebug("10-100 Mb/s %x, 1000 Mb/s %x, 10000 Mb/s %x",
@@ -1690,12 +1579,22 @@ int32_t launchDpdkFrameParser(void)
 
         if (portIndexBmp_10000)
         {
+            uint32_t portBmpSet = 0x00, ports = 0x00;
+
             portIndex = 0x00;
             while (portIndexBmp_10000)
             {
-                if (portIndexBmp_10000 & 0x01)
-                    rte_eal_remote_launch(ReceiveDpdkPkts_IPS_10000, 
-                                   &portMap[portIndex].inport,  getCpuIndex());
+                if (portIndexBmp_10000 & 0x01) {
+                        ports = (portMap[portIndex].inport << 0 )| 
+                                (portMap[portIndex].outport << 8);
+
+                        SCLogDebug(" Ports In-Out %x", ports);
+
+                        rte_eal_remote_launch(ReceiveDpdkPkts_IPS_10000, &ports,  getCpuIndex());
+
+                        portBmpSet = portBmpSet | ((1 << portMap[portIndex].inport) |
+                                                   (1 << portMap[portIndex].outport));
+                }
 
                 portIndexBmp_10000 = portIndexBmp_10000 >> 1;
                 portIndex++;

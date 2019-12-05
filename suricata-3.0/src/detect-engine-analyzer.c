@@ -508,71 +508,104 @@ void EngineAnalysisRulesFailure(char *line, char *file, int lineno)
 void dpdkRuleAnalysis(Signature *s)
 {
     stats_matchPattern.totalRules++;
-    uint8_t checkProto;
     int ret = 0;
 
-    if (s->addr_dst_match4_cnt || s->addr_src_match4_cnt) {
-	uint32_t srcIp = (s->addr_src_match4 == NULL) ? 0x0 : s->addr_src_match4->ip;
-	uint32_t srcIpMask = (s->addr_src_match4 == NULL) ? 0x0 :
-            (~(s->addr_src_match4->ip2 - s->addr_src_match4->ip) & ((uint32_t)-1));
+    do {
+        uint8_t proto = (s->proto.flags & DETECT_PROTO_ANY)     ? 0:
+            DetectProtoContainsProto(&s->proto, IPPROTO_TCP)    ? IPPROTO_TCP:
+            DetectProtoContainsProto(&s->proto, IPPROTO_UDP)    ? IPPROTO_UDP:
+            DetectProtoContainsProto(&s->proto, IPPROTO_SCTP)   ? IPPROTO_SCTP:
+            DetectProtoContainsProto(&s->proto, IPPROTO_ICMP)   ? IPPROTO_ICMP:
+            DetectProtoContainsProto(&s->proto, IPPROTO_ICMPV6) ? IPPROTO_ICMPV6:
+            DetectProtoContainsProto(&s->proto, IPPROTO_GRE)    ? IPPROTO_GRE:
+            DetectProtoContainsProto(&s->proto, IPPROTO_RAW)    ? IPPROTO_RAW:
+            IPPROTO_MAX;
 
-        uint32_t dstIp = (s->addr_dst_match4 == NULL) ? 0x0 : s->addr_dst_match4->ip;
-        uint32_t dstIpMask = (s->addr_dst_match4 == NULL) ? 0x0 :
-            (~(s->addr_dst_match4->ip2 - s->addr_dst_match4->ip) & ((uint32_t)-1));
-
-        ret = addDpdkAcl4Rule(srcIp, srcIpMask, dstIp, dstIpMask);
-        if (ret != 0) {
-            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
+	if (proto == IPPROTO_MAX) {
+            SCLogError(SC_ERR_RULE_KEYWORD_UNKNOWN, " action %x, ip proto: proto unknown!", s->action);
             exit(EXIT_FAILURE);
+         }
+
+        if (s->addr_dst_match4_cnt || s->addr_src_match4_cnt) {
+            uint32_t srcIp = (s->addr_src_match4 == NULL) ? 0x0 : s->addr_src_match4->ip;
+            uint32_t srcIpMask = (s->addr_src_match4 == NULL) ? 0x0 :
+                /*(~(s->addr_src_match4->ip2 - s->addr_src_match4->ip) & ((uint32_t)-1));*/
+                s->addr_src_match4->ip2;
+
+            uint32_t dstIp = (s->addr_dst_match4 == NULL) ? 0x0 : s->addr_dst_match4->ip;
+            uint32_t dstIpMask = (s->addr_dst_match4 == NULL) ? 0x0 :
+                /*(~(s->addr_dst_match4->ip2 - s->addr_dst_match4->ip) & ((uint32_t)-1));*/
+                s->addr_dst_match4->ip2;
+
+            SCLogDebug(" IP4 - src %8x src2 %8x dst %8x dst2 %8x proto 0x%x\n",
+                srcIp, srcIpMask, dstIp, dstIpMask, proto);
+
+            ret = addDpdkAcl4Rule(srcIp, srcIpMask, dstIp, dstIpMask, proto);
+            if (ret != 0) {
+                SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
+                exit(EXIT_FAILURE);
+            }
         }
-    }
 
-    if (s->addr_dst_match6_cnt || s->addr_src_match6_cnt) {
-	uint32_t srcIp[4] = {0, 0, 0, 0};
-	uint32_t srcIpMask[4] = {0, 0, 0, 0};
+        if (s->addr_dst_match6_cnt || s->addr_src_match6_cnt) {
+            uint32_t srcIp[4] = {0, 0, 0, 0};
+            uint32_t srcIpMask[4] = {0, 0, 0, 0};
 
-        srcIp[0] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[0];
-	srcIp[1] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[1];
-	srcIp[2] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[2];
-	srcIp[3] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[3];
+            srcIp[0] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[0];
+            srcIp[1] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[1];
+            srcIp[2] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[2];
+            srcIp[3] = (s->addr_src_match6 == NULL) ? 0x0 : s->addr_src_match6->ip[3];
 
-        srcIpMask[0] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[0] - s->addr_src_match6->ip[0]) & ((uint32_t)-1));
-        srcIpMask[1] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[1] - s->addr_src_match6->ip[1]) & ((uint32_t)-1));
-        srcIpMask[2] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[2] - s->addr_src_match6->ip[2]) & ((uint32_t)-1));
-        srcIpMask[3] = (s->addr_src_match6 == NULL) ? 0x0 :
-            (~(s->addr_src_match6->ip2[3] - s->addr_src_match6->ip[3]) & ((uint32_t)-1));
+            srcIpMask[0] = (s->addr_src_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_src_match6->ip2[0] - s->addr_src_match6->ip[0]) & ((uint32_t)-1));*/
+                s->addr_src_match6->ip2[0];
+            srcIpMask[1] = (s->addr_src_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_src_match6->ip2[1] - s->addr_src_match6->ip[1]) & ((uint32_t)-1));*/
+                s->addr_src_match6->ip2[1];
+            srcIpMask[2] = (s->addr_src_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_src_match6->ip2[2] - s->addr_src_match6->ip[2]) & ((uint32_t)-1));*/
+                s->addr_src_match6->ip2[2];
+            srcIpMask[3] = (s->addr_src_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_src_match6->ip2[3] - s->addr_src_match6->ip[3]) & ((uint32_t)-1));*/
+                s->addr_src_match6->ip2[3];
 
-	uint32_t dstIp[4] = {0, 0, 0, 0};
-	uint32_t dstIpMask[4] = {0, 0, 0, 0};
+            uint32_t dstIp[4] = {0, 0, 0, 0};
+            uint32_t dstIpMask[4] = {0, 0, 0, 0};
 
-        dstIp[0] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[0];
-        dstIp[1] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[1];
-        dstIp[2] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[2];
-        dstIp[3] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[3];
+            dstIp[0] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[0];
+            dstIp[1] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[1];
+            dstIp[2] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[2];
+            dstIp[3] = (s->addr_dst_match6 == NULL) ? 0x0 : s->addr_dst_match6->ip[3];
 
-        dstIpMask[0] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[0] - s->addr_dst_match6->ip[0]) & ((uint32_t)-1));
-        dstIpMask[1] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[1] - s->addr_dst_match6->ip[1]) & ((uint32_t)-1));
-        dstIpMask[2] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[2] - s->addr_dst_match6->ip[2]) & ((uint32_t)-1));
-        dstIpMask[3] = (s->addr_dst_match6 == NULL) ? 0x0 :
-            (~(s->addr_dst_match6->ip2[3] - s->addr_dst_match6->ip[3]) & ((uint32_t)-1));
+            dstIpMask[0] = (s->addr_dst_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_dst_match6->ip2[0] - s->addr_dst_match6->ip[0]) & ((uint32_t)-1));*/
+                s->addr_dst_match6->ip2[0];
+            dstIpMask[1] = (s->addr_dst_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_dst_match6->ip2[1] - s->addr_dst_match6->ip[1]) & ((uint32_t)-1));*/
+                s->addr_dst_match6->ip2[1];
+            dstIpMask[2] = (s->addr_dst_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_dst_match6->ip2[2] - s->addr_dst_match6->ip[2]) & ((uint32_t)-1));*/
+                s->addr_dst_match6->ip2[2];
+            dstIpMask[3] = (s->addr_dst_match6 == NULL) ? 0x0 :
+                /*(~(s->addr_dst_match6->ip2[3] - s->addr_dst_match6->ip[3]) & ((uint32_t)-1));*/
+                s->addr_dst_match6->ip2[3];
 
-        ret = addDpdkAcl6Rule(srcIp, srcIpMask, dstIp, dstIpMask);
-        if (ret != 0) {
-            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
-            exit(EXIT_FAILURE);
+            SCLogDebug(" IP6 - src %8x:%8x:%8x:%8x src2 %8x:%8x:%8x:%8x \
+                dst %8x:%8x:%8x:%8x dst2 %8x:%8x:%8x:%8x proto %x\n", \
+                srcIp[0], srcIp[1], srcIp[2], srcIp[3],
+                srcIpMask[0], srcIpMask[1], srcIpMask[2], srcIpMask[3],
+                dstIp[0], dstIp[1], dstIp[2], dstIp[3],
+                dstIpMask[0], dstIpMask[1], dstIpMask[2], dstIpMask[3],
+                proto);
+
+            ret = addDpdkAcl6Rule(srcIp, srcIpMask, dstIp, dstIpMask, proto);
+            if (ret != 0) {
+                SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " Acl IPv4 failed %d!", ret);
+                exit(EXIT_FAILURE);
+            }
         }
-    }
 
-#if 0
-    printf(" action %x, proto.flags %x \n", s->action, s->proto.flags);
-#endif
-
+    /* we can make use if we do external reassembly */
     if (s->alproto) {
         if (s->alproto == ALPROTO_HTTP)
             stats_matchPattern.http ++;
@@ -594,36 +627,35 @@ void dpdkRuleAnalysis(Signature *s)
             stats_matchPattern.dcerpc ++;
     }
 
-    checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_TCP);
-    if(checkProto == 1)
+    if (DetectProtoContainsProto(&s->proto, IPPROTO_TCP))
         stats_matchPattern.tcp ++;
 
-    checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_UDP);
-    if(checkProto == 1)
+    if (DetectProtoContainsProto(&s->proto, IPPROTO_UDP))
         stats_matchPattern.udp ++;
 
-    checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_SCTP);
-    if(checkProto == 1)
+    if (DetectProtoContainsProto(&s->proto, IPPROTO_SCTP))
         stats_matchPattern.sctp ++;
 
-    checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_ICMPV6);
-    if(checkProto == 1)
+    if (DetectProtoContainsProto(&s->proto, IPPROTO_ICMP))
+        stats_matchPattern.icmpv4 ++;
+
+    if (DetectProtoContainsProto(&s->proto, IPPROTO_ICMPV6))
         stats_matchPattern.icmpv6 ++;
 
-    checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_GRE);
-    if(checkProto == 1)
+    if (DetectProtoContainsProto(&s->proto, IPPROTO_GRE))
         stats_matchPattern.gre ++;
 
-    checkProto = DetectProtoContainsProto(&s->proto, IPPROTO_RAW);
-    if(checkProto == 1)
+    if (DetectProtoContainsProto(&s->proto, IPPROTO_RAW))
         stats_matchPattern.raw ++;
 
     if (s->proto.flags & DETECT_PROTO_IPV4)
         stats_matchPattern.ipv4 ++;
     if (s->proto.flags & DETECT_PROTO_IPV6)
         stats_matchPattern.ipv6 ++;
-}
 
+	s = s->next;
+    } while(s != NULL);
+}
 #endif 
 
 /********************************************************************/
