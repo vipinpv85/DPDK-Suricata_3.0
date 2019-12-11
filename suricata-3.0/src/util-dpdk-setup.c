@@ -42,7 +42,7 @@ uint16_t argument_count = 1;
 char argument[EAL_ARGS][EAL_ARGS * 3] = {{"suricata"}, {""}};
 
 /* STATIC */
-static const struct rte_eth_conf portConf = {
+static const struct rte_eth_conf portConfDefault = {
     .rxmode = {
         .split_hdr_size = 0,
     },
@@ -141,13 +141,25 @@ int32_t dpdkIntelDevSetup(void)
      */
     for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
     {
+        struct rte_eth_conf portConf = portConfDefault;
+
         inport = portMap [portIndex].inport;
+        if (!rte_eth_dev_is_valid_port(inport)) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED," invalid: err=%d, port=%u\n",
+                  ret, (unsigned) inport);
+            return -7;
+        }
+
         rte_eth_dev_info_get (inport, &dev_info);
         if (rte_eth_dev_get_name_by_port(inport, portName) == 0)
             SCLogDebug(" - port (%u) Name (%s)", inport, portName);
         fflush(stdout);
 
         /* ToDo - change default configuration to systune configuration */
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE)
+                portConf.txmode.offloads |=
+                        DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+
         ret = rte_eth_dev_configure(inport, 1, 1, &portConf);
         if (ret < 0)
         {
@@ -200,7 +212,7 @@ int32_t dpdkIntelDevSetup(void)
                        (unsigned) inport,
                        (link.link_duplex == ETH_LINK_FULL_DUPLEX)?"Full":"half",
                        (link.link_status == 1)?"up":"down");
-            return -10;
+            //return -10;
         }
         portSpeed[inport] =    (link.link_speed == ETH_SPEED_NUM_10M)?1:
                                (link.link_speed == ETH_SPEED_NUM_100M)?2:
