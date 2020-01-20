@@ -1,3 +1,7 @@
+#Long Term Support
+
+Planning to End of Life after multi packet ACL support. IP reassembly for true zerocopy is moved out to other project.
+
 ## Purpose
 
 ![dpdk-suricata](https://user-images.githubusercontent.com/1296097/62437531-3aef9000-b761-11e9-8c51-803cd9dddcc8.png)
