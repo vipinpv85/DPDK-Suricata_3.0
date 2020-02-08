@@ -92,8 +92,8 @@ int32_t validateGlobalConfig(void)
     SCLogDebug(" - execute threads: %d", executeThreads);
     if ((((IPS|IDS) & DPDKINTEL_GENCFG.OpMode) &&
                 ((executeThreads) < DPDKINTEL_GENCFG.Port))) {
-        SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED," port %d exceeds %s",
-            DPDKINTEL_GENCFG.Port, (IPS & DPDKINTEL_GENCFG.OpMode)?"IPS":"IDS");
+        SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED," execute threads %d port %d exceeds %s",
+            executeThreads, DPDKINTEL_GENCFG.Port, (IPS & DPDKINTEL_GENCFG.OpMode)?"IPS":"IDS");
         return -4;
     }
 

@@ -1511,7 +1511,7 @@ int32_t launchDpdkFrameParser(void)
     }
 
     /* fetch the interface speed to set to desired bit map */
-    for (reqCores = 0; reqCores < DPDKINTEL_GENCFG.Port; reqCores++)
+    for (reqCores = 0, portIndex = 0; reqCores < DPDKINTEL_GENCFG.Port; reqCores++, portIndex++)
     {
         //rte_eth_link_get_nowait(portMap[portIndex].inport, &linkSpeed);
         rte_eth_link_get(portMap[portIndex].inport, &linkSpeed);
