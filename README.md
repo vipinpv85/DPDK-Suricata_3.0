@@ -108,3 +108,12 @@ dpdkintel:
  # Select dpdk intel operation mode ips|ids|bypass
         opmode: ips
  ```
+
+3. dpdk-suricata.ini
+
+| Section | purpose |
+| -----|-----|
+| EAL | dpdk eal args |
+| PORT-[0-X] | specific configuration per port  |
+| ACL-IPV4 | rule count or number of entires |
+| ACL-IPV6 | rule count or number of entires |
