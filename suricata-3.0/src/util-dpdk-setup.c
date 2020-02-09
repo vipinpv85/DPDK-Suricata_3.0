@@ -35,6 +35,9 @@ file_config_t file_config;
 struct rte_mempool *dp_pktmbuf_pool = NULL;
 struct rte_ring    *srb[16];
 
+uint64_t acl4_rules;
+uint64_t acl6_rules;
+
 struct acl4_rule testv4;
 struct acl6_rule testv6;
 
@@ -42,7 +45,7 @@ uint16_t argument_count = 1;
 char argument[EAL_ARGS][EAL_ARGS * 3] = {{"suricata"}, {""}};
 
 /* STATIC */
-static const struct rte_eth_conf portConf = {
+static const struct rte_eth_conf portConfDefault = {
     .rxmode = {
         .split_hdr_size = 0,
     },
@@ -141,13 +144,25 @@ int32_t dpdkIntelDevSetup(void)
      */
     for (portIndex = 0; portIndex < DPDKINTEL_GENCFG.Port; portIndex++)
     {
+        struct rte_eth_conf portConf = portConfDefault;
+
         inport = portMap [portIndex].inport;
+        if (!rte_eth_dev_is_valid_port(inport)) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED," invalid: err=%d, port=%u\n",
+                  ret, (unsigned) inport);
+            return -7;
+        }
+
         rte_eth_dev_info_get (inport, &dev_info);
         if (rte_eth_dev_get_name_by_port(inport, portName) == 0)
             SCLogDebug(" - port (%u) Name (%s)", inport, portName);
         fflush(stdout);
 
         /* ToDo - change default configuration to systune configuration */
+        if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE)
+                portConf.txmode.offloads |=
+                        DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+
         ret = rte_eth_dev_configure(inport, 1, 1, &portConf);
         if (ret < 0)
         {
@@ -200,7 +215,7 @@ int32_t dpdkIntelDevSetup(void)
                        (unsigned) inport,
                        (link.link_duplex == ETH_LINK_FULL_DUPLEX)?"Full":"half",
                        (link.link_status == 1)?"up":"down");
-            return -10;
+            //return -10;
         }
         portSpeed[inport] =    (link.link_speed == ETH_SPEED_NUM_10M)?1:
                                (link.link_speed == ETH_SPEED_NUM_100M)?2:
@@ -337,6 +352,35 @@ void *ParseDpdkConf(void)
 		}
 	}
 
+	/* get section name ACL-IPV4 */
+	if (rte_cfgfile_has_section(file, "ACL-IPV4")) {
+		int n_entries = rte_cfgfile_section_num_entries(file, "ACL-IPV4");
+		struct rte_cfgfile_entry entries[n_entries];
+
+		SCLogDebug(" section Name: ACL-IPv4 with entries %d", n_entries);
+		if (rte_cfgfile_section_entries(file, "ACL-IPV4", entries, n_entries) != -1) {
+			for (int j = 0; j < n_entries; j++) {
+				SCLogDebug(" - entries[i] name (%s) val (%s)", entries[j].name, entries[j].value);
+				if (strcasecmp("rule_count", entries[j].name) == 0)
+					acl4_rules = atoi(entries[j].value);
+			}
+		}
+	}
+
+	/* get section name ACL-IPV6 */
+	if (rte_cfgfile_has_section(file, "ACL-IPV6")) {
+		int n_entries = rte_cfgfile_section_num_entries(file, "ACL-IPV6");
+		struct rte_cfgfile_entry entries[n_entries];
+
+		SCLogDebug(" section Name: ACL-IPv6 with entries %d", n_entries);
+		if (rte_cfgfile_section_entries(file, "ACL-IPV6", entries, n_entries) != -1) {
+			for (int j = 0; j < n_entries; j++) {
+				SCLogDebug(" - entries[i] name (%s) val (%s)", entries[j].name, entries[j].value);
+				if (strcasecmp("rule_count", entries[j].name) == 0)
+					acl6_rules = atoi(entries[j].value);
+			}
+		}
+	}
 #if 0
 	/* get section name PORT-X */
 	for (int i = 0; i < RTE_MAX_ETHPORTS; i++) {
@@ -413,7 +457,7 @@ void dpdkAclConfSetup(void)
     SCLogNotice("DPDK ACL setup\n");
 
     acl_param.socket_id = 0;
-    acl_param.max_rule_num = 1024 * 1024 * 8;
+    acl_param.max_rule_num = acl4_rules;
 
     /* setup acl - IPv4 */
     acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip4_defs));
@@ -427,6 +471,7 @@ void dpdkAclConfSetup(void)
     file_config.acl.ipv4AclCtx = (void *)ctx;
 
     /* setup acl - IPv6 */
+    acl_param.max_rule_num = acl6_rules;
     acl_param.rule_size = RTE_ACL_RULE_SZ(RTE_DIM(ip6_defs));
     acl_param.name = "suricata-ipv6";
     ctx = rte_acl_create(&acl_param);
