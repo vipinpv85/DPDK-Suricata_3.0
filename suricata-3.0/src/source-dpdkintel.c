@@ -1515,8 +1515,10 @@ int32_t launchDpdkFrameParser(void)
     {
 	portIndex = reqCores;
 
+        rte_eth_dev_start(portMap[portIndex].inport);
         //rte_eth_link_get_nowait(portMap[portIndex].inport, &linkSpeed);
         rte_eth_link_get(portMap[portIndex].inport, &linkSpeed);
+        rte_eth_dev_stop(portMap[portIndex].inport);
 
         if ((linkSpeed.link_speed == ETH_SPEED_NUM_10M) ||
             (linkSpeed.link_speed == ETH_SPEED_NUM_100M))
