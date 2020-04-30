@@ -1470,9 +1470,7 @@ int32_t launchDpdkFrameParser(void)
     struct rte_eth_link linkSpeed;
     struct rte_config *ptr = rte_eal_get_configuration();
 
-    SCLogDebug(" Core current %u master %u",
-               rte_lcore_id(),rte_get_master_lcore());
-
+    SCLogDebug(" Core current %u master %u", rte_lcore_id(), rte_get_master_lcore());
     if (rte_lcore_id() != rte_get_master_lcore()) {
         SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED,
                    " DPDK should be started in master core only!!"
@@ -1513,12 +1511,24 @@ int32_t launchDpdkFrameParser(void)
     /* fetch the interface speed to set to desired bit map */
     for (reqCores = 0, portIndex = 0; reqCores < DPDKINTEL_GENCFG.Port; reqCores++, portIndex++)
     {
-	portIndex = reqCores;
+        int max_retry = 10;
+        portIndex = reqCores;
 
-        rte_eth_dev_start(portMap[portIndex].inport);
-        //rte_eth_link_get_nowait(portMap[portIndex].inport, &linkSpeed);
-        rte_eth_link_get(portMap[portIndex].inport, &linkSpeed);
-        rte_eth_dev_stop(portMap[portIndex].inport);
+        if (rte_eth_dev_start(portMap[portIndex].inport) < 0) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " failed to start port %d for link state\n", portMap[portIndex].inport);
+            SCReturnInt(TM_ECODE_FAILED);
+        }
+
+        do {
+            rte_delay_us(1000);
+            //rte_eth_link_get_nowait(portMap[portIndex].inport, &linkSpeed);
+            rte_eth_link_get(portMap[portIndex].inport, &linkSpeed);
+        } while ((!linkSpeed.link_status) && (--max_retry > 0));
+
+        if (!linkSpeed.link_status) {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " port (%u) link state is down", portMap[portIndex].inport);
+            SCReturnInt(TM_ECODE_FAILED);
+        }
 
         if ((linkSpeed.link_speed == ETH_SPEED_NUM_10M) ||
             (linkSpeed.link_speed == ETH_SPEED_NUM_100M))
@@ -1527,19 +1537,13 @@ int32_t launchDpdkFrameParser(void)
             portIndexBmp_10000 =  portIndexBmp_10000 | (1 << reqCores);
         else if (linkSpeed.link_speed == ETH_SPEED_NUM_1G)
             portIndexBmp_1000 =  portIndexBmp_1000 | (1 << reqCores);
-        else
-        {
+        else {
             SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, "Unknown speed (%u) for %u", linkSpeed.link_speed, reqCores);
-        }
-
-	if (rte_eth_dev_start(portMap[portIndex].inport) < 0) {
-            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " failed RX-TX start on port %d\n", portMap[portIndex].inport);
             SCReturnInt(TM_ECODE_FAILED);
         }
     }
 
-    SCLogDebug("10-100 Mb/s %x, 1000 Mb/s %x, 10000 Mb/s %x",
-			portIndexBmp_10_100, portIndexBmp_1000, portIndexBmp_10000);
+    SCLogDebug("10-100 Mb/s %x, 1000 Mb/s %x, 10000 Mb/s %x", portIndexBmp_10_100, portIndexBmp_1000, portIndexBmp_10000);
 
     /* ToDo: use function pointer array to invoke for IDS|IPS */
 
