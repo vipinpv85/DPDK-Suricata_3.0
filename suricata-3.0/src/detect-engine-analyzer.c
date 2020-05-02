@@ -47,7 +47,9 @@ static pcre *percent_re = NULL;
 static pcre_extra *percent_re_study = NULL;
 static char log_path[PATH_MAX];
 
+#ifdef HAVE_DPDKINTEL
 stats_matchPattern_t stats_matchPattern;
+#endif
 
 typedef struct FpPatternStats_ {
     uint16_t min;
