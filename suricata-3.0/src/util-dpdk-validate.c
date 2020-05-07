@@ -88,7 +88,8 @@ int32_t validateGlobalConfig(void)
         return -3;
     }
 
-    executeThreads = (DPDKINTEL_DEVCFG.cpus/2);
+    //executeThreads = (DPDKINTEL_DEVCFG.cpus/2);
+    executeThreads = DPDKINTEL_DEVCFG.cpus;
     SCLogDebug(" - execute threads: %d", executeThreads);
     if ((((IPS|IDS) & DPDKINTEL_GENCFG.OpMode) &&
                 ((executeThreads) < DPDKINTEL_GENCFG.Port))) {

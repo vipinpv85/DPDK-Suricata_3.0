@@ -1,8 +1,8 @@
 #define _GNU_SOURCE
 
+#include "util-dpdk-common.h"
 #include "util-dpdk-setup.h"
 #include "util-dpdk-config.h"
-#include "util-dpdk-common.h"
 #include "util-error.h"
 #include "util-debug.h"
 #include "dpdk-include-common.h"
@@ -61,7 +61,7 @@ static struct rte_eth_rxconf rx_conf = {
     .rx_drop_en = 1,
 };
 
-static struct   ether_addr dp_ports_eth_addr [S_DPDK_MAX_ETHPORTS];
+static struct ether_addr dp_ports_eth_addr [RTE_MAX_ETHPORTS];
 
 void initLaunchFunc(void);
 

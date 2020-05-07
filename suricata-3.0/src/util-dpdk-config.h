@@ -67,8 +67,8 @@
 #define BYPASS_MODE_S         0x01
 #define INTERCEPT_MODE_S      0x01
 
-#ifndef S_DPDK_MAX_ETHPORTS
-#define S_DPDK_MAX_ETHPORTS (4)
+#ifndef RTE_MAX_ETHPORTS
+#define RTE_MAX_ETHPORTS (4)
 #endif
 
 #define S_DPDK_MAX_APPS     2
@@ -167,7 +167,7 @@ typedef struct
     uint8_t mgmtCore;
     uint8_t cpus;
 
-    port_config_t    port_config[S_DPDK_MAX_ETHPORTS];
+    port_config_t    port_config[RTE_MAX_ETHPORTS];
     generic_config_t generic_config;
 #endif
     void *ipv4AclCtx;
@@ -190,7 +190,7 @@ typedef struct
     uint8_t          availCpus;
     tune_general_t   tune_general;
     generic_config_t generic_config;
-    port_config_t    port_config[S_DPDK_MAX_ETHPORTS];
+    port_config_t    port_config[RTE_MAX_ETHPORTS];
     device_config_t  device_config;
     DpdkConfig_t     acl;
 } file_config_t;
