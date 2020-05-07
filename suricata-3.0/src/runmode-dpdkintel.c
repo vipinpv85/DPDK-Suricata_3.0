@@ -255,7 +255,22 @@ void *DpdkIntelConfigParser(const char *device)
 
 int DpdkIntelGetThreadsCount(void *conf __attribute__((unused))) 
 {
-    return 1;
+	int workerThreadsReq = 0;
+
+	/* fetch each port find number of rx queues */
+	struct rte_eth_dev_info dev_info;
+	uint16_t portid;
+
+	RTE_ETH_FOREACH_DEV(portid) {
+		rte_eth_dev_info_get(portid, &dev_info);
+
+		workerThreadsReq += dev_info.nb_rx_queues;
+	}
+
+	SCLogNotice(" worker threds required for (%d) rx queues!", workerThreadsReq);
+	return workerThreadsReq;
+	//return file_config.dpdkCpuCount;
+	//return 1;
 }
 
 int RunModeDpdkIntelWorkers(void) 
@@ -266,6 +281,8 @@ int RunModeDpdkIntelWorkers(void)
 
     RunModeInitialize();
     TimeModeSetLive();
+
+	SCLogNotice(" minimum workers %d", file_config.dpdkCpuCount);
 
     ret = RunModeSetLiveCaptureWorkers(DpdkIntelConfigParser, DpdkIntelGetThreadsCount,
                                        "DpdkIntelReceive", "DpdkIntelDecode",
