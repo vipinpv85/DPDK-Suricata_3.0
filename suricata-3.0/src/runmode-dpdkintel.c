@@ -282,7 +282,7 @@ int RunModeDpdkIntelWorkers(void)
     RunModeInitialize();
     TimeModeSetLive();
 
-	SCLogNotice(" minimum workers %d", file_config.dpdkCpuCount);
+    SCLogNotice(" minimum workers %d", DpdkIntelGetThreadsCount(NULL));
 
     ret = RunModeSetLiveCaptureWorkers(DpdkIntelConfigParser, DpdkIntelGetThreadsCount,
                                        "DpdkIntelReceive", "DpdkIntelDecode",

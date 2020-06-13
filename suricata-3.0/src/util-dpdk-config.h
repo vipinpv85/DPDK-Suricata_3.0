@@ -158,18 +158,6 @@ typedef struct
 
 typedef struct
 {
-#if 0
-    uint8_t isDpdk:1;
-    uint8_t rsrvd:7;
-    uint8_t suricataCpuOffset;
-    uint8_t dpdkCpuCount;
-    uint8_t dpdkCpuOffset;
-    uint8_t mgmtCore;
-    uint8_t cpus;
-
-    port_config_t    port_config[RTE_MAX_ETHPORTS];
-    generic_config_t generic_config;
-#endif
     void *ipv4AclCtx;
     void *ipv6AclCtx;
     void *ipv4AclRules;
