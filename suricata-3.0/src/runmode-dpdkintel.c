@@ -25,7 +25,7 @@
 #include "util-device.h"
 
 #include "decode.h"
-
+#include "detect-engine.h"
 
 
 #define DPDKINTEL_RUNMODE_WORKERS 1
@@ -206,6 +206,7 @@ void *DpdkIntelConfigParser(const char *device)
     //int inputDevice = 0;
     int deviceIndex = 0;
     char intf[5];
+    static uint8_t ringid = 0;
 
     DpdkIntelIfaceConfig_t *dpdkIntelConf = SCMalloc(sizeof(DpdkIntelIfaceConfig_t));
     if (unlikely(dpdkIntelConf == NULL)) {
@@ -232,7 +233,11 @@ void *DpdkIntelConfigParser(const char *device)
     //memcpy(dpdkIntelConf->outIface, intf, 1); 
     dpdkIntelConf->outIface = SCStrdup(intf); 
 
-    dpdkIntelConf->ringBufferId = portMap[deviceIndex].ringid;
+    /* ToDo */
+    dpdkIntelConf->outQueue = 1; 
+
+    //dpdkIntelConf->ringBufferId = portMap[deviceIndex].ringid;
+    dpdkIntelConf->ringBufferId = ringid++;
     dpdkIntelConf->flags = 0;
     dpdkIntelConf->bpfFilter = NULL;
     dpdkIntelConf->threads = 1;
@@ -269,13 +274,14 @@ int DpdkIntelGetThreadsCount(void *conf __attribute__((unused)))
 
 	SCLogNotice(" worker threds required for (%d) rx queues!", workerThreadsReq);
 	return workerThreadsReq;
-	//return file_config.dpdkCpuCount;
-	//return 1;
 }
 
 int RunModeDpdkIntelWorkers(void) 
 {
     int ret;
+    char tname[50] = {""};
+    char *thread_name;
+    TmModule *tm_module;
 
     SCEnter();
 
@@ -284,9 +290,86 @@ int RunModeDpdkIntelWorkers(void)
 
     SCLogNotice(" minimum workers %d", DpdkIntelGetThreadsCount(NULL));
 
+#if 0
     ret = RunModeSetLiveCaptureWorkers(DpdkIntelConfigParser, DpdkIntelGetThreadsCount,
                                        "DpdkIntelReceive", "DpdkIntelDecode",
                                        "RxDPDKINTEL", "pktacqloop");
+    if (ret != 0) {
+        SCLogError(SC_ERR_RUNMODE, "Runmode start failed");
+        exit(EXIT_FAILURE);
+    }
+
+#else
+    for (int i = 0; i < DpdkIntelGetThreadsCount(NULL); i++) { 
+        snprintf(tname, sizeof(tname), "%s%d", "DPDK-WORKER-", i);
+        thread_name = SCStrdup(tname);
+        if (thread_name == NULL) {
+            SCLogError(SC_ERR_RUNMODE, "string duplicatie (%s) failed", tname);
+            exit(EXIT_FAILURE);
+	}
+
+        ThreadVars *tv_worker = TmThreadCreatePacketHandler(thread_name, "packetpool", "packetpool", "packetpool", "packetpool", "pktacqloop");
+        if (tv_worker == NULL) {
+	    printf("ERROR: TmThreadsCreate failed\n");
+	    exit(EXIT_FAILURE);
+	}
+
+        tm_module = TmModuleGetByName("DpdkIntelReceive");
+        if (tm_module == NULL) {
+		printf("ERROR: TmModuleGetByName failed for DpdkIntelReceive\n");
+		exit(EXIT_FAILURE);
+        }
+	void *recv_ptr = DpdkIntelConfigParser(NULL);
+        if (recv_ptr == NULL) {
+		printf("ERROR: recv_ptr failed \n");
+		exit(EXIT_FAILURE);
+        }
+        TmSlotSetFuncAppend(tv_worker, tm_module, (void *)recv_ptr);
+
+	/* ToDo*/
+	//TmThreadSetCPU(tv_worker, WORKER_CPU_SET);
+	TmThreadSetCPUAffinity(tv_worker,getCpuIndex());
+
+        tm_module = TmModuleGetByName("DpdkIntelDecode");
+        if (tm_module == NULL) {
+		printf("ERROR: TmModuleGetByName DpdkIntelDecode failed\n");
+		exit(EXIT_FAILURE);
+        }
+        TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
+
+#if 0
+        tm_module = TmModuleGetByName("StreamTcp");
+        if (tm_module == NULL) {
+		printf("ERROR: TmModuleGetByName StreamTcp failed\n");
+		exit(EXIT_FAILURE);
+        }
+        TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
+        if (DetectEngineEnabled()) {
+		tm_module = TmModuleGetByName("Detect");
+		if (tm_module == NULL) {
+			printf("ERROR: TmModuleGetByName Detect failed\n");
+			exit(EXIT_FAILURE);
+		}
+		TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
+        }
+#endif
+
+tm_module = TmModuleGetByName("RespondReject");
+if (tm_module == NULL) {
+		printf("ERROR: TmModuleGetByName for RespondReject failed\n");
+			exit(EXIT_FAILURE);
+}
+TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
+
+SetupOutputs(tv_worker);
+if (TmThreadSpawn(tv_worker) != TM_ECODE_OK) {
+		printf("ERROR: TmThreadSpawn failed\n");
+			exit(EXIT_FAILURE);
+}
+
+SCLogNotice(" ceated %s for count %d ", tname, i);
+    }
+#endif
 
     if (ret != 0) {
         SCLogError(SC_ERR_RUNMODE, "Runmode start failed");

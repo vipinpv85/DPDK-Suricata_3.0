@@ -39,7 +39,7 @@ typedef struct
 /* P R O T O T Y P E S */
 int dpdkPortSetup(uint8_t portId);
 int dpdkPortUnSet(uint8_t portId);
-int ringBuffSetup(void);
+int ringBuffSetup(uint8_t ringCount);
 void dpdkConfSetup(void);
 void *ParseDpdkConf(void);
 void dpdkAclConfSetup(void);

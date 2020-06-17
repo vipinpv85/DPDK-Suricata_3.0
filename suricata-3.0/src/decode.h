@@ -562,6 +562,7 @@ typedef struct Packet_
     uint8_t dpdkIntel_ringId;
     uint8_t dpdkIntel_inPort;
     uint8_t dpdkIntel_outPort;
+    uint8_t dpdkIntel_outQueue;
 #endif /* HAVE_DPDKINTEL */
 }
 #ifdef HAVE_MPIPE

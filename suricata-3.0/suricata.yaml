@@ -50,7 +50,7 @@ host-mode: auto
 
 # Default pid file.
 # Will use this file if no --pidfile in command options.
-#pid-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/var/run/suricata.pid
+#pid-file: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/var/run/suricata.pid
 
 # Daemon working directory
 # Suricata will change directory to this one if provided
@@ -65,7 +65,7 @@ host-mode: auto
 # The default logging directory.  Any log or output file will be
 # placed here if its not specified with a full path name.  This can be
 # overridden with the -l command line parameter.
-default-log-dir: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/var/log/suricata/
+default-log-dir: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/var/log/suricata/
 
 # Unix command socket can be used to pass commands to suricata.
 # An external tool can then connect to get information from suricata
@@ -637,14 +637,14 @@ threading:
     - management-cpu-set:
         cpu: [ 0 ]  # include only these cpus in affinity settings
     - receive-cpu-set:
-        cpu: [ 0 ]  # include only these cpus in affinity settings
+        cpu: [ "10-13" ]  # include only these cpus in affinity settings
     - decode-cpu-set:
-        cpu: [ 0, 1 ]
+        cpu: [ "10-11" ]
         mode: "balanced"
     - stream-cpu-set:
-        cpu: [ "0-1" ]
+        cpu: [ "10-11" ]
     - detect-cpu-set:
-        cpu: [ "all" ]
+        cpu: [ "10-11" ]
         mode: "exclusive" # run detect threads in these cpus
         # Use explicitely 3 threads and don't compute number by using
         # detect-thread-ratio variable:
@@ -652,20 +652,20 @@ threading:
         prio:
           low: [ 0 ]
           medium: [ "1-2" ]
-          high: [ 3 ]
-          default: "medium"
+          high: [ "10-13" ]
+          default: "high"
     - verdict-cpu-set:
-        cpu: [ 0 ]
+        cpu: [ "10-13" ]
         prio:
           default: "high"
     - reject-cpu-set:
-        cpu: [ 0 ]
+        cpu: [ "10-13" ]
         prio:
-          default: "low"
+          default: "high"
     - output-cpu-set:
-        cpu: [ "all" ]
+        cpu: [ "10-13" ]
         prio:
-           default: "medium"
+           default: "high"
   #
   # By default Suricata creates one "detect" thread per available CPU/CPU core.
   # This setting allows controlling this behaviour. A ratio setting of 2 will
@@ -996,7 +996,7 @@ logging:
       # type: json
   - file:
       enabled: no
-      filename: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/var/log/suricata/suricata.log
+      filename: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/var/log/suricata/suricata.log
       # type: json
   - syslog:
       enabled: no
@@ -1137,24 +1137,24 @@ ipfw:
 
 # Set the default rule path here to search for the files.
 # if not set, it will look at the current working dir
-default-rule-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/rules
+default-rule-path: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/sysconf/suricata/rules
 rule-files:
-# - botcc.rules
-# - ciarmy.rules
-# - compromised.rules
-# - drop.rules
-# - dshield.rules
-# - emerging-activex.rules
-# - emerging-attack_response.rules
-# - emerging-chat.rules
-# - emerging-current_events.rules
-# - emerging-dns.rules
-# - emerging-dos.rules
-# - emerging-exploit.rules
-# - emerging-ftp.rules
- - emerging-games.rules
-# - emerging-icmp_info.rules
-## - emerging-icmp.rules
+        # - botcc.rules
+        # - ciarmy.rules
+        # - compromised.rules
+        # - drop.rules
+        # - dshield.rules
+        # - emerging-activex.rules
+        # - emerging-attack_response.rules
+        # - emerging-chat.rules
+        # - emerging-current_events.rules
+        # - emerging-dns.rules
+        # - emerging-dos.rules
+        # - emerging-exploit.rules
+        # - emerging-ftp.rules
+        # - emerging-games.rules
+        # - emerging-icmp_info.rules
+# - emerging-icmp.rules
 # - emerging-imap.rules
 # - emerging-inappropriate.rules
 # - emerging-malware.rules
@@ -1187,11 +1187,11 @@ rule-files:
 # - smtp-events.rules    # available in suricata sources under rules dir
 # - dns-events.rules     # available in suricata sources under rules dir
 # - tls-events.rules     # available in suricata sources under rules dir
-## - modbus-events.rules  # available in suricata sources under rules dir
+# - modbus-events.rules  # available in suricata sources under rules dir
 # - app-layer-events.rules  # available in suricata sources under rules dir
 
-classification-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/classification.config
-reference-config-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/reference.config
+classification-file: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/sysconf/suricata/classification.config
+reference-config-file: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/sysconf/suricata/reference.config
 
 # Holds variables that would be used by the engine.
 vars:
@@ -1253,8 +1253,8 @@ vars:
 #   - alert
 
 # IP Reputation
-#reputation-categories-file: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/iprep/categories.txt
-#default-reputation-path: /home/vipin/DPDK-Suricata_3.0/suricata-3.0/myconf/etc/suricata/iprep
+#reputation-categories-file: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/sysconf/suricata/iprep/categories.txt
+#default-reputation-path: /root/Pavithra_proj/ourtest/DPDK-Suricata_3.0/suricata-3.0/test/sysconf/suricata/iprep
 #reputation-files:
 # - reputation.list
 

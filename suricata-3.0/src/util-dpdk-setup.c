@@ -65,10 +65,11 @@ static struct ether_addr dp_ports_eth_addr [RTE_MAX_ETHPORTS];
 
 void initLaunchFunc(void);
 
-int ringBuffSetup(void)
+int ringBuffSetup(uint8_t ringCount)
 {
     char srbName [25];
-    uint8_t index = 0, maxRing = 16;
+    uint8_t index = 0, maxRing = ringCount;
+    maxRing = 16;
     //(DPDKINTEL_GENCFG.Port > SC_RINGBUF)?SC_RINGBUF:DPDKINTEL_GENCFG.Port;
 
     for (index = 0; index < maxRing; index++)
@@ -104,7 +105,7 @@ int32_t dpdkIntelDevSetup(void)
 {
     uint8_t portIndex = 0, portTotal = rte_eth_dev_count_avail();
     uint8_t inport = 0;
-    int32_t ret = 0;
+    int32_t ret = 0, ringCount = 0;
     char portName[RTE_ETH_NAME_MAX_LEN] = {0};
 
     struct rte_eth_link link;
@@ -118,26 +119,23 @@ int32_t dpdkIntelDevSetup(void)
     SCLogDebug(" - DPDK ports %d config-file ports %d", portTotal, DPDKINTEL_GENCFG.Port);
 
     dp_pktmbuf_pool =
+	     rte_pktmbuf_pool_create ((const char *)"suricata-mbuf-pool", NB_MBUF * 2,
+			    256, 2048, RTE_MBUF_DEFAULT_BUF_SIZE, rte_socket_id());
+#if 0
              rte_mempool_create("mbuf_pool", NB_MBUF,
-                        MBUF_SIZE, 32,
-                        sizeof(struct rte_pktmbuf_pool_private),
+                        MBUF_SIZE, 256,
+                        2048,
                         rte_pktmbuf_pool_init, NULL,
                         rte_pktmbuf_init, NULL,
                         rte_socket_id()/*SOCKET_ID_ANY*/,
                         0/*MEMPOOL_F_SP_PUT*/);
+#endif
     if (unlikely(NULL == dp_pktmbuf_pool))
     {
         SCLogError(SC_ERR_DPDKINTEL_MEM_FAILED," mbuf_pool alloc failed");
         return -1;
     }
     SCLogDebug(" - pkt MBUFF setup %p", dp_pktmbuf_pool);
-
-    ret = ringBuffSetup();
-    if (ret < 0)
-    {
-        SCLogError(SC_ERR_DPDKINTEL_MEM_FAILED, " DPDK Ring Buffer setup failed");
-        return -11;
-    }
 
     /* check interface PCI information
        ToDo: support for non INTEL PCI interfaces also - phase 2
@@ -163,7 +161,7 @@ int32_t dpdkIntelDevSetup(void)
                 portConf.txmode.offloads |=
                         DEV_TX_OFFLOAD_MBUF_FAST_FREE;
 
-        ret = rte_eth_dev_configure(inport, 1, 1, &portConf);
+        ret = rte_eth_dev_configure(inport, 1, 2, &portConf);
         if (ret < 0)
         {
             /* TODO: free mempool */
@@ -172,6 +170,8 @@ int32_t dpdkIntelDevSetup(void)
             return -7;
         }
         SCLogDebug(" - Configured Port %d", inport);
+
+	ringCount += 1;
 
         rte_eth_macaddr_get(inport, 
                            &dp_ports_eth_addr[inport]);
@@ -202,6 +202,16 @@ int32_t dpdkIntelDevSetup(void)
                 ret, (unsigned) inport);
             return -9;
         }
+	ret = rte_eth_tx_queue_setup(inport, 1, RTE_TEST_TX_DESC_DEFAULT,
+                                     0/*SOCKET_ID_ANY*/,
+                                     NULL);
+        if (ret < 0)
+        {
+            SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " rte_eth_tx_queue_setup:err=%d, port=%u",
+                ret, (unsigned) inport);
+            return -9;
+        }
+
         SCLogDebug(" - TX Queue setup Port %d", inport);
 
         /* ToDo: check this from YAML conf file - pahse 2 */
@@ -242,6 +252,13 @@ int32_t dpdkIntelDevSetup(void)
             portSpeedUnknown++;
         }
 
+    }
+
+    ret = ringBuffSetup(ringCount);
+    if (ret < 0)
+    {
+        SCLogError(SC_ERR_DPDKINTEL_MEM_FAILED, " DPDK Ring Buffer setup failed");
+        return -11;
     }
 
     SCLogDebug("DPDK port setup over!!");
@@ -309,7 +326,7 @@ void dpdkConfSetup(void)
             SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED,
                       "Mapped ports %d <--> %d Speed Mismatch",
                       inport, outport);
-            exit(EXIT_FAILURE);
+            //exit(EXIT_FAILURE);
         }
 
         portBit |= 1 << inport;

@@ -66,6 +66,7 @@ typedef struct DpdkIntelIfaceConfig
 
     char *bpfFilter;
     char *outIface;
+    uint8_t outQueue;
 
     SC_ATOMIC_DECLARE(unsigned int, ref);
 } DpdkIntelIfaceConfig_t;

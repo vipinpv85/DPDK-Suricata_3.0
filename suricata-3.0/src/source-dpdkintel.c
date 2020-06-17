@@ -62,6 +62,7 @@ typedef struct DpdkIntelThreadVars_t_
 
     uint8_t inIfaceId;
     uint8_t outIfaceId;
+    uint8_t outQueueId;
 
     int copy_mode;
     int vlan_disabled;
@@ -95,7 +96,7 @@ TmEcode DecodeDpdkThreadDeinit(ThreadVars *tv, void *data);
 void ReceiveDpdkThreadExitStats(ThreadVars *, void *);
 
 
-TmEcode DpdkSendFrame(struct rte_mbuf *m, uint8_t port, uint16_t num);
+TmEcode DpdkSendFrame(struct rte_mbuf *m, uint8_t port, uint8_t queueid, uint16_t num);
 static inline Packet * DpdkIntelProcessPacket(DpdkIntelThreadVars_t *ptv, struct rte_mbuf *m);
 
 extern int max_pending_packets;
@@ -192,36 +193,40 @@ FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
 void DpdkIntelReleasePacket(Packet *p)
 {
     uint8_t portId = (p->dpdkIntel_outPort);
-    void *m = (struct rte_mbuf *) p->dpdkIntel_mbufPtr;
+    struct rte_mbuf *m = (struct rte_mbuf *) p->dpdkIntel_mbufPtr;
 
-    SCLogDebug(" TX packet through port %d for %p", portId, m);
+    SCLogDebug(" TX packet through port %d for %p mode %s", portId, m, (DPDKINTEL_GENCFG.OpMode == IDS) ? "IDS" : (DPDKINTEL_GENCFG.OpMode == IPS) ? "IPS" : "Bypass");
 
     /* Use this thread's context to free the packet. */
     if (DPDKINTEL_GENCFG.OpMode == IDS) {
         SCLogDebug(" Free frame as its IDS ");
         rte_pktmbuf_free(m);
     } else if (DPDKINTEL_GENCFG.OpMode == IPS) {
+        SCLogDebug(" Frame as its IPS ");
        /* test packet action as drop, if true drop */
        if (PACKET_TEST_ACTION(p, ACTION_DROP) == 0) {
-           if (rte_eth_tx_burst(portId, 0, (struct rte_mbuf **)&m, 1) != 1) {
-               SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", 
-                           portId, m, DPDKINTEL_GENCFG.OpMode);
+           if (rte_eth_tx_burst(p->dpdkIntel_outPort, p->dpdkIntel_outQueue, &m, 1) != 1) {
+               SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", portId, m, DPDKINTEL_GENCFG.OpMode);
                rte_pktmbuf_free(m);
            }
-       }
-       else {
+       } else {
            SCLogDebug(" Pkt Action to DROP in IPS, hence free mbuf ");
            rte_pktmbuf_free(m);
        }
     } else if (DPDKINTEL_GENCFG.OpMode == BYPASS) {
-       if (rte_eth_tx_burst(portId, 0, (struct rte_mbuf **)&m, 1) != 1) {
+        SCLogDebug(" Free frame as its Bypass ");
+        rte_pktmbuf_free(m);
+	return;
+       if (rte_eth_tx_burst(portId, p->dpdkIntel_outQueue, &m, 1) != 1) {
            SCLogDebug(" Unable to TX via port %d for %p in OpMode %d", 
                        portId, m, DPDKINTEL_GENCFG.OpMode);
            rte_pktmbuf_free(m);
        }
     }
 
+#if 1 
     PacketFreeOrRelease(p);
+#endif
     return;
 }
 
@@ -304,6 +309,7 @@ static inline Packet *DpdkIntelProcessPacket(DpdkIntelThreadVars_t *ptv, struct 
      *       This will reduce the memory alloc or get for Packet
      */
 
+#if 1 
     Packet *p = PacketGetFromQueueOrAlloc();
     if (unlikely(p == NULL)) {
         //ptv->drops += ;
@@ -311,9 +317,13 @@ static inline Packet *DpdkIntelProcessPacket(DpdkIntelThreadVars_t *ptv, struct 
         return NULL;
     }
 
-    SCLogDebug(" Suricata packet %p for byte %d", p, caplen);
+    SCLogDebug(" Suricata packet %p for byte %d %d", p, caplen, sizeof(Packet));
 
     PACKET_RECYCLE(p);
+#else
+    Packet *p = rte_mbuf_to_priv(m);
+#endif
+
     PKT_SET_SRC(p, PKT_SRC_WIRE);
     p->datalink = LINKTYPE_ETHERNET;
     p->livedev = ptv->livedev;
@@ -328,17 +338,18 @@ static inline Packet *DpdkIntelProcessPacket(DpdkIntelThreadVars_t *ptv, struct 
     p->dpdkIntel_ringId = ptv->ringBuffId;
     p->dpdkIntel_inPort = ptv->inIfaceId;
     p->dpdkIntel_outPort = ptv->outIfaceId;
+    p->dpdkIntel_outQueue = ptv->outQueueId;
     p->ReleasePacket = DpdkIntelReleasePacket;
 
     return p;
 }
 
 
-TmEcode DpdkSendFrame(struct rte_mbuf *m, uint8_t port, uint16_t num)
+TmEcode DpdkSendFrame(struct rte_mbuf *m, uint8_t port, uint8_t queueId, uint16_t num)
 {
-    unsigned queueid = 0, ret = 0;
+    unsigned queueid = queueId, ret = 0;
 
-    ret = rte_eth_tx_burst(port, (uint16_t) queueid, &m, num);
+    ret = rte_eth_tx_burst(port, (uint16_t) 0 /*queueid */, &m, num);
     if (unlikely(ret < num)) {
         SCLogDebug("Failed to send Packet %d", ret);
         do {
@@ -376,75 +387,75 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 
     ptv->slot = s->slot_next;
 
-    SCLogDebug("RX-TX Intf Id in %d out %d\n", ptv->inIfaceId, ptv->outIfaceId);
+    SCLogDebug("Intf Id in %d out %d ret %d\n", ptv->inIfaceId, ptv->outIfaceId, ret);
 
-    while(1) {
-        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
-            //DpdkIntelDumpCounters(ptv);
-            SCLogDebug(" Received Signal!");
-            SCReturnInt(TM_ECODE_OK);
-        }
-
-	struct rte_mbuf *rbQueue[1024] = {0};
-
-        /* invoke rte_api for getting packets*/
-        packet_q_len = rte_ring_dequeue_burst(srb[ptv->ringBuffId], 
-                                              (void *)&rbQueue,
-                                              /*64*/128, &avail);
-
-        SCLogDebug(" dequeue ringId (%d) count (%d) remaining (%d)",
-            ptv->ringBuffId, packet_q_len, avail);
-
-        /* ToDo: update counters - phase 2 */
-        if (likely(packet_q_len)) {
-            SCLogDebug("rte dequeue count: %d", packet_q_len);
-
-            for (j = 0; ((j < PREFETCH_OFFSET) && (j < packet_q_len)); j++) {
-                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[j], void *));
+#if 1
+	while (1) {
+            if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
+                //DpdkIntelDumpCounters(ptv);
+                SCLogDebug(" Received Signal!");
+                SCReturnInt(TM_ECODE_OK);
             }
+	    struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+            uint16_t nb_rx = rte_eth_rx_burst(ptv->inIfaceId, 0, pkts_burst, MAX_PKT_BURST);
+            if (likely(nb_rx > 0)) {
+                SCLogDebug("Port %u Frames: %u", ptv->inIfaceId, nb_rx);
 
-            for (j = 0; j < (packet_q_len - PREFETCH_OFFSET); j++) {
-                struct rte_mbuf *tmp = rbQueue[j];
-                /* Prefetch others and process prev prefetched packets */
-                rte_prefetch0(rte_pktmbuf_mtod(rbQueue[j + PREFETCH_OFFSET], void *));
+                if ((stats_matchPattern.totalRules == 0)) {
+                    uint16_t ret = rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
+                    if (unlikely ((nb_rx - ret) != 0))
+                    {
+                        dpdkStats [ptv->outIfaceId].tx_err += (nb_rx - ret);
 
-                SCLogDebug(" User data %"PRIx64, tmp->udata64);
+                        SCLogNotice("Failed to send Packet %d ret : %d", ptv->outIfaceId, ret);
 
-                p = DpdkIntelProcessPacket(ptv, tmp);
-                if (unlikely(NULL == p)) {
-                    SCLogError(SC_ERR_DPDKINTEL_SCAPI, "failed to Process to Suricata");
-                    /* update counters */
-                    dpdkStats[ptv->inIfaceId].sc_pkt_null++;
-                    rte_pktmbuf_free(tmp);
-                    continue;
-                }
+                        for (; ret < nb_rx; ret++)
+                            rte_pktmbuf_free(pkts_burst[ret]);
+                    }
+    	    	SCReturnInt(TM_ECODE_OK);
+                } /* end of totalRules */
 
-                SCLogDebug(" Suricata pkt %p mbuff %p len %u offset %u ",
-                    p, tmp, tmp->pkt_len, tmp->data_off);
+                //uint16_t ret = rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
+                for (j = 0; j < nb_rx; j++) {
+                    uint32_t acl_res = 0xffffffff;
 
-                SET_PKT_LEN(p, tmp->pkt_len);
+                    SCLogDebug(" User data %"PRIx64, tmp->udata64);
+                    struct rte_mbuf *tmp = pkts_burst[j];
 
-                /* 
-                   packet data copy it will be consuming cycles and memory
-                   Alternatively we pass the mbuff which contains all info
-                 */
-                p->dpdkIntel_mbufPtr = tmp;
+		    /* ACL check for rule match */
+                    FilterPackets(tmp, &acl_res, ptv->outIfaceId);
+                    if (!acl_res) {
+                        if (rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&tmp, 1) == 0) {
+                            rte_pktmbuf_free(tmp);
+                            continue;
+                        }
+                    }
 
-#if 0
-    SCLogDebug(" Forwarding frame from ring buffer!!");
-    DpdkSendFrame(tmp, ptv->outIfaceId, 1);
-    continue;
-#endif
-                SCLogDebug("Invoking thread slot process!!");
-                if (unlikely(TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK)) {
-                   TmqhOutputPacketpool(ptv->tv, p);
-                    /* update counters */
-                    dpdkStats[ptv->inIfaceId].sc_fail++;
-                    rte_pktmbuf_free(tmp);
-                    continue;
-               }
-            }
+    		    p = DpdkIntelProcessPacket(ptv, tmp);
+                    if (unlikely(NULL == p)) {
+                         SCLogError(SC_ERR_DPDKINTEL_SCAPI, "failed to Process to Suricata");
+                         /* update counters */
+                         dpdkStats[ptv->inIfaceId].sc_pkt_null++;
+                         rte_pktmbuf_free(tmp);
+                         continue;
+                    }
 
+                    SCLogDebug(" Suricata pkt %p mbuff %p len %u offset %u ", p, tmp, tmp->pkt_len, tmp->data_off);
+
+                    SET_PKT_LEN(p, tmp->pkt_len);
+                    p->dpdkIntel_mbufPtr = tmp;
+    
+		    if (unlikely(TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK)) {
+                        TmqhOutputPacketpool(ptv->tv, p);
+                        /* update counters */
+                        dpdkStats[ptv->inIfaceId].sc_fail++;
+                        rte_pktmbuf_free(tmp);
+                        continue;
+                    }
+		}
+	    }
+	}
+#else
             for (; j < packet_q_len; j++) {
                 struct rte_mbuf *tmp = rbQueue[j];
 
@@ -470,13 +481,6 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                  */
                 p->dpdkIntel_mbufPtr = tmp;
 
-#if 0
-    SCLogDebug(" Forwarding frame from ring buffer!!");
-    DpdkSendFrame(tmp, ptv->outIfaceId, 1);
-    continue;
-#endif
-                SCLogDebug("Invoking thread slot process!!");
-                if (unlikely(TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK)) {
                    TmqhOutputPacketpool(ptv->tv, p);
                     /* update counters */
                     dpdkStats[ptv->inIfaceId].sc_fail++;
@@ -485,13 +489,8 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                }
             }
         } /* dequed frames from ring buffer */
-    }
-
-#if 0
-    SCLogNotice(" Forwarding frame from ring buffer!!");
-    DpdkSendFrame(tmp, ptv->outIfaceId, 1);
-    continue;
 #endif
+
     SCReturnInt(TM_ECODE_OK);
 
 }
@@ -513,6 +512,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
  */
 TmEcode ReceiveDpdkThreadInit(ThreadVars *tv, void *initdata, void **data) 
 {
+    static uint8_t queue = 0;
     int32_t intfId = 0;
     static uint32_t startedPorts = 0x00;
 
@@ -532,7 +532,7 @@ TmEcode ReceiveDpdkThreadInit(ThreadVars *tv, void *initdata, void **data)
     /* config file port index starts from 1 to 32 */
     /* dpdk port index starts from 0 to 31 */
     intfId = atoi(dpdkconf->iface);
-    SCLogDebug(" * DPDK Interface to configure is %s %d ", dpdkconf->iface, intfId);
+    SCLogDebug(" DPDK Interface to configure is %s %d ", dpdkconf->iface, intfId);
    
     DpdkIntelThreadVars_t *ditv = SCMalloc(sizeof(DpdkIntelThreadVars_t));
     if (unlikely(ditv == NULL))
@@ -558,6 +558,7 @@ TmEcode ReceiveDpdkThreadInit(ThreadVars *tv, void *initdata, void **data)
     /* DPDK in & out Interfaces */
     ditv->inIfaceId  = intfId;
     ditv->outIfaceId = atoi(dpdkconf->outIface);
+    ditv->outQueueId  = dpdkconf->outQueue;
 
     SCLogDebug(" ***** DPDK Ports In %d & Out %d", ditv->inIfaceId, ditv->outIfaceId);
 
@@ -689,7 +690,7 @@ TmEcode DecodeDpdk(ThreadVars *tv, Packet *p, void *data, PacketQueue *pq, Packe
         StatsIncr(tv, dtv->counter_vlan);
     }
 
-    DecodeEthernet(tv, dtv, p, ((uint8_t *)dptr->buf_addr + dptr->data_off), dptr->pkt_len, pq);
+    DecodeEthernet(tv, dtv, p, (uint8_t *) rte_pktmbuf_mtod(dptr, uint8_t *), dptr->pkt_len, pq);
 
     //TODO: check return code of DecodeEthernet and release mbuf for failures.
     PacketDecodeFinalize(tv, dtv, p);
@@ -1183,12 +1184,13 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
     uint16_t outPort = ((*(uint16_t *) arg) & 0xFF00) >> 8;
 
     SCLogNotice("============ IPS inside %s =============", __func__);
-    SCLogNotice(" port %u, core %u, enable %d, socket %d phy %d", 
+    SCLogNotice(" port %u, core %u, enable %d, socket %d phy %d to ring (%d)", 
             inPort,
             rte_lcore_id(),
             rte_lcore_is_enabled(rte_lcore_id()),
             rte_lcore_to_socket_id(rte_lcore_id()),
-            rte_socket_id());
+            rte_socket_id(),
+	    inPort);
 
     while(1)
     {
@@ -1201,8 +1203,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
         if (likely(nb_rx > 0)) {
             SCLogDebug("Port %u Frames: %u", inPort, nb_rx);
 
-            if (unlikely(stats_matchPattern.totalRules == 0)) {
-                //rte_delay_us(1);
+            if ((stats_matchPattern.totalRules == 0)) {
                 ret = rte_eth_tx_burst(outPort, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
                 if (unlikely ((nb_rx - ret) != 0))
                 {
@@ -1216,6 +1217,12 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
                 }
                 continue;
             } /* end of totalRules */
+
+#if 0
+	    for (int i = 0; i < nb_rx; i++)
+                DpdkSendFrame(pkts_burst[i], outPort, 1, 1);
+	    continue;
+#endif
 
             if (unlikely(1 == rte_ring_full(srb [ringId]))) {
                 dpdkStats [inPort].ring_full++;
@@ -1518,6 +1525,7 @@ int32_t launchDpdkFrameParser(void)
             SCLogError(SC_ERR_DPDKINTEL_CONFIG_FAILED, " failed to start port %d for link state\n", portMap[portIndex].inport);
             SCReturnInt(TM_ECODE_FAILED);
         }
+	printf(" start port %d\n", portMap[portIndex].inport);
 
         do {
             rte_delay_us(1000);
@@ -1596,9 +1604,9 @@ int32_t launchDpdkFrameParser(void)
                         ports = (portMap[portIndex].inport << 0 )| 
                                 (portMap[portIndex].outport << 8);
 
-                        SCLogDebug(" Ports In-Out %x", ports);
+                        SCLogNotice(" Ports In-Out %x", ports);
 
-                        rte_eal_remote_launch(ReceiveDpdkPkts_IPS_10000, &ports,  getCpuIndex());
+                        //rte_eal_remote_launch(ReceiveDpdkPkts_IPS_10000, &ports,  getCpuIndex());
 
                         portBmpSet = portBmpSet | ((1 << portMap[portIndex].inport) |
                                                    (1 << portMap[portIndex].outport));
