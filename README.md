@@ -1,6 +1,6 @@
 # Long Term Support
 
-End of Life after multi packet ACL support.
+End of Life (no more new supprot addition & features)
 
 ## Purpose
 
