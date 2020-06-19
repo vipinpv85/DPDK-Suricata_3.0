@@ -1647,7 +1647,7 @@ int32_t launchDpdkFrameParser(void)
         SCLogNotice("DPDK Started in IPS Mode!!!");
     }
     else if (DPDKINTEL_GENCFG.OpMode == IDS) {
-       rte_eal_remote_launch(ReceiveDpdkPkts_IDS, NULL, getCpuIndex());
+       //rte_eal_remote_launch(ReceiveDpdkPkts_IDS, NULL, getCpuIndex());
        SCLogNotice("DPDK Started in IDS Mode!!!");
     }
     else if (DPDKINTEL_GENCFG.OpMode == BYPASS) {
