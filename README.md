@@ -4,8 +4,6 @@ End of Life (no more new supprot addition & features)
 
 ## Purpose
 
-![dpdk-suricata](https://user-images.githubusercontent.com/1296097/62437531-3aef9000-b761-11e9-8c51-803cd9dddcc8.png)
-
 Make use of DPDK PMD, with pre-parser and 3 Tuple ACL before Suricata worker stage. This helps to send only relevan ipv4 and ipv6 to Suricata worker pipeline.
 
 ## How to build
