@@ -158,13 +158,13 @@ void ParseDpdkConfig(void)
         }
 
         {
-	portMap [portMapIndex].inport = atoi(iface);
-	portInOutSet |= 0x01;
-	if ((DPDKINTEL_GENCFG.OpMode != IDS)) {
-		/* PortMap structure update with outport */
-		portMap [portMapIndex].outport = atoi(oface);
-		portInOutSet |= 0x02;
-	}
+            portMap [portMapIndex].inport = atoi(iface);
+            portInOutSet |= 0x01;
+            if ((DPDKINTEL_GENCFG.OpMode != IDS)) {
+                /* PortMap structure update with outport */
+                portMap [portMapIndex].outport = atoi(oface);
+                portInOutSet |= 0x02;
+            }
 
             if ((DPDKINTEL_GENCFG.OpMode != IDS) && (portInOutSet == 0x03))
             {
@@ -201,7 +201,7 @@ void ParseDpdkConfig(void)
 }
 
 
-void *DpdkIntelConfigParser(const char *device) 
+void *DpdkIntelConfigParser(void) 
 {
     //int inputDevice = 0;
     int deviceIndex = 0;
@@ -210,7 +210,7 @@ void *DpdkIntelConfigParser(const char *device)
 
     DpdkIntelIfaceConfig_t *dpdkIntelConf = SCMalloc(sizeof(DpdkIntelIfaceConfig_t));
     if (unlikely(dpdkIntelConf == NULL)) {
-        SCLogError(SC_ERR_MEM_ALLOC, "Failed to allocate memory for dev %s ", device);
+        SCLogError(SC_ERR_MEM_ALLOC, "Failed to allocate memory for dev instance");
         return NULL;
     }
     memset (dpdkIntelConf, 0, sizeof(DpdkIntelIfaceConfig_t));
@@ -290,86 +290,76 @@ int RunModeDpdkIntelWorkers(void)
 
     SCLogNotice(" minimum workers %d", DpdkIntelGetThreadsCount(NULL));
 
-#if 0
-    ret = RunModeSetLiveCaptureWorkers(DpdkIntelConfigParser, DpdkIntelGetThreadsCount,
-                                       "DpdkIntelReceive", "DpdkIntelDecode",
-                                       "RxDPDKINTEL", "pktacqloop");
-    if (ret != 0) {
-        SCLogError(SC_ERR_RUNMODE, "Runmode start failed");
-        exit(EXIT_FAILURE);
-    }
-
-#else
-    for (int i = 0; i < DpdkIntelGetThreadsCount(NULL); i++) { 
+    for (int i = 0; i < DpdkIntelGetThreadsCount(NULL); i++) {
         snprintf(tname, sizeof(tname), "%s%d", "DPDK-WORKER-", i);
         thread_name = SCStrdup(tname);
         if (thread_name == NULL) {
             SCLogError(SC_ERR_RUNMODE, "string duplicatie (%s) failed", tname);
             exit(EXIT_FAILURE);
-	}
+        }
 
-        ThreadVars *tv_worker = TmThreadCreatePacketHandler(thread_name, "packetpool", "packetpool", "packetpool", "packetpool", "pktacqloop");
+        ThreadVars *tv_worker = TmThreadCreatePacketHandler(thread_name,
+               "packetpool", "packetpool",
+               "packetpool", "packetpool",
+               "pktacqloop");
         if (tv_worker == NULL) {
-	    printf("ERROR: TmThreadsCreate failed\n");
-	    exit(EXIT_FAILURE);
-	}
+            printf("ERROR: TmThreadsCreate failed\n");
+            exit(EXIT_FAILURE);
+        }
 
         tm_module = TmModuleGetByName("DpdkIntelReceive");
         if (tm_module == NULL) {
-		printf("ERROR: TmModuleGetByName failed for DpdkIntelReceive\n");
-		exit(EXIT_FAILURE);
+            printf("ERROR: TmModuleGetByName failed for DpdkIntelReceive\n");
+            exit(EXIT_FAILURE);
         }
-	void *recv_ptr = DpdkIntelConfigParser(NULL);
+
+        void *recv_ptr = DpdkIntelConfigParser();
         if (recv_ptr == NULL) {
-		printf("ERROR: recv_ptr failed \n");
-		exit(EXIT_FAILURE);
+            printf("ERROR: recv_ptr failed \n");
+            exit(EXIT_FAILURE);
         }
         TmSlotSetFuncAppend(tv_worker, tm_module, (void *)recv_ptr);
 
-	/* ToDo*/
-	//TmThreadSetCPU(tv_worker, WORKER_CPU_SET);
-	TmThreadSetCPUAffinity(tv_worker,getCpuIndex());
-
         tm_module = TmModuleGetByName("DpdkIntelDecode");
         if (tm_module == NULL) {
-		printf("ERROR: TmModuleGetByName DpdkIntelDecode failed\n");
-		exit(EXIT_FAILURE);
+            printf("ERROR: TmModuleGetByName DpdkIntelDecode failed\n");
+            exit(EXIT_FAILURE);
         }
         TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
 
-#if 0
         tm_module = TmModuleGetByName("StreamTcp");
         if (tm_module == NULL) {
-		printf("ERROR: TmModuleGetByName StreamTcp failed\n");
-		exit(EXIT_FAILURE);
+            printf("ERROR: TmModuleGetByName StreamTcp failed\n");
+            exit(EXIT_FAILURE);
         }
         TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
+
         if (DetectEngineEnabled()) {
-		tm_module = TmModuleGetByName("Detect");
-		if (tm_module == NULL) {
-			printf("ERROR: TmModuleGetByName Detect failed\n");
-			exit(EXIT_FAILURE);
-		}
-		TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
+            tm_module = TmModuleGetByName("Detect");
+            if (tm_module == NULL) {
+                printf("ERROR: TmModuleGetByName Detect failed\n");
+                exit(EXIT_FAILURE);
+            }
+            TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
         }
-#endif
 
-tm_module = TmModuleGetByName("RespondReject");
-if (tm_module == NULL) {
-		printf("ERROR: TmModuleGetByName for RespondReject failed\n");
-			exit(EXIT_FAILURE);
-}
-TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
+        tm_module = TmModuleGetByName("RespondReject");
+        if (tm_module == NULL) {
+            printf("ERROR: TmModuleGetByName for RespondReject failed\n");
+            exit(EXIT_FAILURE);
+        }
+        TmSlotSetFuncAppend(tv_worker, tm_module, NULL);
 
-SetupOutputs(tv_worker);
-if (TmThreadSpawn(tv_worker) != TM_ECODE_OK) {
-		printf("ERROR: TmThreadSpawn failed\n");
-			exit(EXIT_FAILURE);
-}
+        TmThreadSetCPUAffinity(tv_worker,getCpuIndex());
 
-SCLogNotice(" ceated %s for count %d ", tname, i);
+        SetupOutputs(tv_worker);
+        if (TmThreadSpawn(tv_worker) != TM_ECODE_OK) {
+            printf("ERROR: TmThreadSpawn failed\n");
+            exit(EXIT_FAILURE);
+        }
+
+        SCLogNotice(" ceated %s", tname);
     }
-#endif
 
     if (ret != 0) {
         SCLogError(SC_ERR_RUNMODE, "Runmode start failed");
