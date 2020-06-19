@@ -358,7 +358,7 @@ TmEcode DpdkSendFrame(struct rte_mbuf *m, uint8_t port, uint8_t queueId, uint16_
         return TM_ECODE_FAILED;
     }
 
-    SCLogDebug("Packet Send \n");
+    SCLogNotice("Packet Send \n");
     return TM_ECODE_OK;
 }
 
@@ -389,49 +389,71 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 
     SCLogDebug("Intf Id in %d out %d ret %d\n", ptv->inIfaceId, ptv->outIfaceId, ret);
 
-#if 1
-	while (1) {
+    if ((stats_matchPattern.totalRules == 0)) {
+	while(1) {
             if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
                 //DpdkIntelDumpCounters(ptv);
                 SCLogDebug(" Received Signal!");
                 SCReturnInt(TM_ECODE_OK);
             }
-	    struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+
+            struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
             uint16_t nb_rx = rte_eth_rx_burst(ptv->inIfaceId, 0, pkts_burst, MAX_PKT_BURST);
             if (likely(nb_rx > 0)) {
                 SCLogDebug("Port %u Frames: %u", ptv->inIfaceId, nb_rx);
+                uint16_t ret = rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
+                if (unlikely ((nb_rx - ret) != 0)) {
+                    dpdkStats [ptv->outIfaceId].tx_err += (nb_rx - ret);
 
-                if ((stats_matchPattern.totalRules == 0)) {
-                    uint16_t ret = rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
-                    if (unlikely ((nb_rx - ret) != 0))
-                    {
-                        dpdkStats [ptv->outIfaceId].tx_err += (nb_rx - ret);
+                    SCLogNotice("Failed to send Packet %d ret : %d", ptv->outIfaceId, ret);
 
-                        SCLogNotice("Failed to send Packet %d ret : %d", ptv->outIfaceId, ret);
+                    for (; ret < nb_rx; ret++)
+                        rte_pktmbuf_free(pkts_burst[ret]);
+                }
 
-                        for (; ret < nb_rx; ret++)
-                            rte_pktmbuf_free(pkts_burst[ret]);
-                    }
-    	    	SCReturnInt(TM_ECODE_OK);
-                } /* end of totalRules */
+            }
+	}
+    }
 
-                //uint16_t ret = rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
-                for (j = 0; j < nb_rx; j++) {
-                    uint32_t acl_res = 0xffffffff;
+    while (1) {
+        if (unlikely(suricata_ctl_flags & (SURICATA_STOP | SURICATA_KILL))) {
+            //DpdkIntelDumpCounters(ptv);
+            SCLogDebug(" Received Signal!");
+            SCReturnInt(TM_ECODE_OK);
+        }
 
-                    SCLogDebug(" User data %"PRIx64, tmp->udata64);
+        struct rte_mbuf *pkts_burst[MAX_PKT_BURST];
+        uint16_t nb_rx = rte_eth_rx_burst(ptv->inIfaceId, 0, pkts_burst, MAX_PKT_BURST);
+        if (likely(nb_rx > 0)) {
+            SCLogDebug("Port %u Frames: %u", ptv->inIfaceId, nb_rx);
+    
+           //uint16_t ret = rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
+            for (j = 0; j < nb_rx; j++) {
+                uint32_t acl_res = 0xffffffff;
+    
+                SCLogDebug(" User data %"PRIx64, tmp->udata64);
+    
+                for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
+                    rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
+                }
+
+                for (j = 0; j < (nb_rx - PREFETCH_OFFSET); j++) {
                     struct rte_mbuf *tmp = pkts_burst[j];
+                    rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j + PREFETCH_OFFSET], void *));
 
-		    /* ACL check for rule match */
+        	    /* ACL check for rule match */
                     FilterPackets(tmp, &acl_res, ptv->outIfaceId);
                     if (!acl_res) {
-                        if (rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&tmp, 1) == 0) {
-                            rte_pktmbuf_free(tmp);
-                            continue;
-                        }
+			if (DPDKINTEL_GENCFG.OpMode != IDS) {
+			    SCLogDebug("in IPS or BYPASS with ACL no match!");
+			    if (likely(rte_eth_tx_burst(ptv->outIfaceId, (uint16_t) 0 /*queueid */, &tmp, 1) == 1))
+    			         continue;
+			}
+                        rte_pktmbuf_free(tmp);
+                        continue;
                     }
-
-    		    p = DpdkIntelProcessPacket(ptv, tmp);
+        
+        	    p = DpdkIntelProcessPacket(ptv, tmp);
                     if (unlikely(NULL == p)) {
                          SCLogError(SC_ERR_DPDKINTEL_SCAPI, "failed to Process to Suricata");
                          /* update counters */
@@ -439,13 +461,51 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                          rte_pktmbuf_free(tmp);
                          continue;
                     }
-
+        
                     SCLogDebug(" Suricata pkt %p mbuff %p len %u offset %u ", p, tmp, tmp->pkt_len, tmp->data_off);
+        
+                    SET_PKT_LEN(p, tmp->pkt_len);
+                    p->dpdkIntel_mbufPtr = tmp;
+        
+        	    if (unlikely(TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK)) {
+                        TmqhOutputPacketpool(ptv->tv, p);
+                        /* update counters */
+                        dpdkStats[ptv->inIfaceId].sc_fail++;
+                        rte_pktmbuf_free(tmp);
+                        continue;
+                    }
+                }
 
+                for (; j < nb_rx; j++) {
+                    struct rte_mbuf *tmp = pkts_burst[j];
+
+    	            /* ACL check for rule match */
+                    FilterPackets(tmp, &acl_res, ptv->outIfaceId);
+                    if (!acl_res) {
+		        if (DPDKINTEL_GENCFG.OpMode != IDS) {
+		    	    SCLogDebug("in IPS or BYPASS with ACL no match!");
+    		    	    if (likely(rte_eth_tx_burst(ptv->outIfaceId, (uint16_t) 0 /*queueid */, &tmp, 1) == 1))
+    		                continue;
+		        }
+                        rte_pktmbuf_free(tmp);
+                        continue;
+                    }
+    
+    	            p = DpdkIntelProcessPacket(ptv, tmp);
+                    if (unlikely(NULL == p)) {
+                         SCLogError(SC_ERR_DPDKINTEL_SCAPI, "failed to Process to Suricata");
+                         /* update counters */
+                         dpdkStats[ptv->inIfaceId].sc_pkt_null++;
+                         rte_pktmbuf_free(tmp);
+                         continue;
+                    }
+    
+                    SCLogDebug(" Suricata pkt %p mbuff %p len %u offset %u ", p, tmp, tmp->pkt_len, tmp->data_off);
+    
                     SET_PKT_LEN(p, tmp->pkt_len);
                     p->dpdkIntel_mbufPtr = tmp;
     
-		    if (unlikely(TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK)) {
+    	            if (unlikely(TmThreadsSlotProcessPkt(ptv->tv, ptv->slot, p) != TM_ECODE_OK)) {
                         TmqhOutputPacketpool(ptv->tv, p);
                         /* update counters */
                         dpdkStats[ptv->inIfaceId].sc_fail++;
@@ -453,43 +513,9 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
                         continue;
                     }
 		}
-	    }
-	}
-#else
-            for (; j < packet_q_len; j++) {
-                struct rte_mbuf *tmp = rbQueue[j];
-
-                SCLogDebug(" User data %"PRIx64, tmp->udata64);
-
-                p = DpdkIntelProcessPacket(ptv, tmp);
-                if (unlikely(NULL == p)) {
-                    SCLogError(SC_ERR_DPDKINTEL_SCAPI, "failed to Process to Suricata");
-                    /* update counters */
-                    dpdkStats[ptv->inIfaceId].sc_pkt_null++;
-                    rte_pktmbuf_free(tmp);
-                    continue;
-                }
-
-                SCLogDebug(" Suricata pkt %p mbuff %p len %u offset %u ",
-                    p, tmp, tmp->pkt_len, tmp->data_off);
-
-                SET_PKT_LEN(p, tmp->pkt_len);
-
-                /* 
-                   packet data copy it will be consuming cycles and memory
-                   Alternatively we pass the mbuff which contains all info
-                 */
-                p->dpdkIntel_mbufPtr = tmp;
-
-                   TmqhOutputPacketpool(ptv->tv, p);
-                    /* update counters */
-                    dpdkStats[ptv->inIfaceId].sc_fail++;
-                    rte_pktmbuf_free(tmp);
-                    continue;
-               }
-            }
-        } /* dequed frames from ring buffer */
-#endif
+    	    }
+        }
+    }
 
     SCReturnInt(TM_ECODE_OK);
 
@@ -1232,6 +1258,7 @@ int32_t ReceiveDpdkPkts_IPS_10000(__attribute__((unused)) void *arg)
             } /* end of ring full */
 
              SCLogDebug(" Ring %d packets to enqueue %d", ringId, nb_rx);
+
 
             for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
                 rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
