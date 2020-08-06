@@ -105,7 +105,8 @@ dport 13
 
 static struct rte_acl_field_def ip4_defs[NUM_FIELDS_IPV4] = {
     [0] = {
-    .type = RTE_ACL_FIELD_TYPE_BITMASK,
+    .type = RTE_ACL_FIELD_TYPE_RANGE/*RTE_ACL_FIELD_TYPE_MASK*/,
+    //.type = RTE_ACL_FIELD_TYPE_BITMASK,
     .size = sizeof(uint8_t),
     .field_index = PROTO_FIELD_IPV4,
     .input_index = RTE_ACL_IPV4_PROTO,
@@ -164,7 +165,8 @@ enum {
 #define IP6_ADDR_SIZE 16
 static struct rte_acl_field_def ip6_defs[IP6_NUM] = {
     {
-    .type = RTE_ACL_FIELD_TYPE_BITMASK,
+    .type = RTE_ACL_FIELD_TYPE_RANGE/*RTE_ACL_FIELD_TYPE_MASK*/,
+    //.type = RTE_ACL_FIELD_TYPE_BITMASK,
     .size = sizeof(uint8_t),
     .field_index = IP6_PROTO,
     .input_index = IP6_PROTO,
