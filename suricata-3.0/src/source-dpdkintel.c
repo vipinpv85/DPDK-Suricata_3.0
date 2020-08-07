@@ -166,7 +166,6 @@ FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
                 &data, res, 1, 1, RTE_ACL_CLASSIFY_SSE) == 0)) {
                 dpdkStats [inPort].ipv4_pkt_success++;
                 (*res == 0) ? dpdkStats [inPort].ipv4_pkt_aclmiss++ : dpdkStats [inPort].ipv4_pkt_aclhit++;
-
                 SCLogDebug(" post ipv4 acl result %x", *res);
             } else {
                 dpdkStats [inPort].ipv4_pkt_fail++;
@@ -181,7 +180,6 @@ FilterPackets(struct rte_mbuf *m, uint32_t *res, uint16_t inPort)
                 &data, res, 1, 1, RTE_ACL_CLASSIFY_SSE) == 0)) {
                 dpdkStats [inPort].ipv6_pkt_success++; 
                 (*res == 0) ? dpdkStats [inPort].ipv6_pkt_aclmiss++ : dpdkStats [inPort].ipv6_pkt_aclhit++;
-
                 SCLogDebug(" ipv6 acl result %x", *res);
             } else {
                 dpdkStats [inPort].ipv6_pkt_fail++; 
@@ -387,7 +385,7 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
 
     ptv->slot = s->slot_next;
 
-    SCLogDebug("Intf Id in %d out %d ret %d\n", ptv->inIfaceId, ptv->outIfaceId, ret);
+    SCLogDebug("Intf Id in %d out %d \n", ptv->inIfaceId, ptv->outIfaceId);
 
     if ((stats_matchPattern.totalRules == 0)) {
 	while(1) {
@@ -430,8 +428,6 @@ TmEcode ReceiveDpdkLoop(ThreadVars *tv, void *data, void *slot)
            //uint16_t ret = rte_eth_tx_burst(ptv->outIfaceId, 0, (struct rte_mbuf **)&pkts_burst, nb_rx);
             for (j = 0; j < nb_rx; j++) {
                 uint32_t acl_res = 0xffffffff;
-    
-                SCLogDebug(" User data %"PRIx64, tmp->udata64);
     
                 for (j = 0; ((j < PREFETCH_OFFSET) && (j < nb_rx)); j++) {
                     rte_prefetch0(rte_pktmbuf_mtod(pkts_burst[j], void *));
